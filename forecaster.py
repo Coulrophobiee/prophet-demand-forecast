@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Food Demand Forecaster - Prophet Model Implementation
-Enhanced version with data availability analysis and smart filtering
+Fixed version with proper model key handling
 """
 
 import pandas as pd # type: ignore
@@ -25,7 +25,8 @@ class FoodDemandForecaster:
         self.column_mapping = {}
         self.train_aggregated = None
         self.weekly_demand = None
-        self.data_availability = {}  # Track data availability
+        self.data_availability = {}
+        self.meal_price_data = {}
         
     def load_data(self):
         """Load train and test datasets"""
@@ -38,7 +39,7 @@ class FoodDemandForecaster:
                 print("❌ train.csv not found in current directory")
                 return False
                 
-            # OPTIONAL: test.csv is not required for forecasting
+            # test.csv is optional
             if os.path.exists('test.csv'):
                 self.test_data = pd.read_csv('test.csv')
                 print(f"✅ Loaded test.csv: {len(self.test_data)} records")
@@ -48,7 +49,7 @@ class FoodDemandForecaster:
                 print("ℹ️ test.csv not found - continuing without it (not required for forecasting)")
                 
             self.preprocess_data()
-            self.analyze_data_availability()  # Analyze what combinations work
+            self.analyze_data_availability()
             return True
             
         except Exception as e:
@@ -67,6 +68,8 @@ class FoodDemandForecaster:
         week_candidates = ['week', 'time', 'period', 'date']
         center_candidates = ['center_id', 'center', 'location_id', 'location', 'store_id', 'store']
         meal_candidates = ['meal_id', 'meal', 'product_id', 'product', 'item_id', 'item']
+        checkout_price_candidates = ['checkout_price', 'final_price', 'selling_price', 'price']
+        base_price_candidates = ['base_price', 'original_price', 'list_price', 'standard_price']
         
         detected = {}
         
@@ -81,6 +84,10 @@ class FoodDemandForecaster:
                 detected['center'] = col
             elif any(candidate in col_lower for candidate in meal_candidates):
                 detected['meal'] = col
+            elif any(candidate in col_lower for candidate in checkout_price_candidates):
+                detected['checkout_price'] = col
+            elif any(candidate in col_lower for candidate in base_price_candidates):
+                detected['base_price'] = col
         
         print(f"🔍 Detected columns: {detected}")
         return detected
@@ -117,8 +124,20 @@ class FoodDemandForecaster:
         
         return regional_mapping
 
+    def calculate_discount_metrics(self):
+        """Calculate price metrics for Prophet regressors - simplified to checkout_price only"""
+        checkout_col = self.column_mapping.get('checkout_price')
+        
+        if checkout_col:
+            print(f"💰 Price analysis completed:")
+            print(f"   • Using checkout_price as regressor")
+            print(f"   • Average checkout price: ${self.train_data[checkout_col].mean():.2f}")
+            print(f"   • Price range: ${self.train_data[checkout_col].min():.2f} - ${self.train_data[checkout_col].max():.2f}")
+        else:
+            print("⚠️ checkout_price column not found - skipping price regression")
+
     def preprocess_data(self):
-        """Preprocess data for Prophet model"""
+        """Preprocess data for Prophet model with checkout_price regressor"""
         if self.train_data is None:
             return
         
@@ -137,21 +156,28 @@ class FoodDemandForecaster:
             print("❌ Could not detect target column")
             return
         
+        # Calculate price metrics
+        self.calculate_discount_metrics()
+        
         target_col = self.column_mapping['target']
         week_col = self.column_mapping.get('week', 'week')
         meal_col = self.column_mapping.get('meal', 'meal_id')
+        checkout_price_col = self.column_mapping.get('checkout_price')
         
         print(f"📊 Using columns: target={target_col}, week={week_col}, meal={meal_col}")
+        print(f"💰 Price regressor: checkout_price={checkout_price_col}")
         
         try:
-            # Aggregate weekly demand by region and meal
-            group_cols = [week_col, 'region']
-            if meal_col in self.train_data.columns:
-                group_cols.append(meal_col)
+            # Aggregate weekly demand by region and meal with price information
+            agg_dict = {target_col: 'sum'}
             
-            self.train_aggregated = self.train_data.groupby(group_cols).agg({
-                target_col: 'sum'
-            }).reset_index()
+            # Add price aggregation if available
+            if checkout_price_col:
+                agg_dict[checkout_price_col] = 'mean'
+            
+            group_cols = [week_col, 'region', meal_col] if meal_col in self.train_data.columns else [week_col, 'region']
+            
+            self.train_aggregated = self.train_data.groupby(group_cols).agg(agg_dict).reset_index()
             
             # Rename columns to standard names
             rename_dict = {target_col: 'num_orders'}
@@ -162,11 +188,18 @@ class FoodDemandForecaster:
             
             self.train_aggregated = self.train_aggregated.rename(columns=rename_dict)
             
-            # Create overall weekly aggregation
-            self.weekly_demand = self.train_data.groupby(week_col)[target_col].sum().reset_index()
+            # Create overall weekly aggregation with price data
+            overall_agg_dict = {target_col: 'sum'}
+            if checkout_price_col:
+                overall_agg_dict[checkout_price_col] = 'mean'
+            
+            self.weekly_demand = self.train_data.groupby(week_col).agg(overall_agg_dict).reset_index()
             self.weekly_demand = self.weekly_demand.rename(columns={week_col: 'week', target_col: 'num_orders'})
             self.weekly_demand['ds'] = pd.to_datetime('2010-01-01') + pd.to_timedelta(self.weekly_demand['week'] * 7, unit='D')
             self.weekly_demand['y'] = self.weekly_demand['num_orders']
+            
+            # Store meal price data for future forecasting
+            self.calculate_meal_price_stats()
             
             # Log actual week range
             min_week = self.weekly_demand['week'].min()
@@ -176,265 +209,248 @@ class FoodDemandForecaster:
             print(f"📊 Data preprocessed: {total_weeks} weeks of data")
             print(f"📅 Week range: {min_week} - {max_week}")
             print(f"🗺️ Regional aggregation complete with {len(self.regional_mapping)} centers in 4 regions")
+            print(f"🍽️ Meal-specific forecasting enabled with checkout_price regressor")
             
         except Exception as e:
             print(f"❌ Error preprocessing data: {e}")
 
-    def analyze_data_availability(self):
-        """Analyze data availability for different region/meal combinations"""
-        print("\n🔍 Analyzing data availability for different combinations...")
+    def calculate_meal_price_stats(self):
+        """Calculate price statistics per meal for forecasting - simplified to checkout_price only"""
+        if 'meal_id' not in self.train_aggregated.columns:
+            return
         
-        if self.train_aggregated is None:
+        checkout_col = self.column_mapping.get('checkout_price')
+        
+        self.meal_price_data = {}
+        
+        for meal_id in self.train_aggregated['meal_id'].unique():
+            meal_data = self.train_aggregated[self.train_aggregated['meal_id'] == meal_id]
+            
+            price_stats = {'meal_id': meal_id}
+            
+            if checkout_col and checkout_col in meal_data.columns:
+                price_stats['avg_checkout_price'] = meal_data[checkout_col].mean()
+                price_stats['recent_checkout_price'] = meal_data[checkout_col].tail(12).mean()
+            
+            self.meal_price_data[meal_id] = price_stats
+        
+        print(f"💰 Checkout price statistics calculated for {len(self.meal_price_data)} meals")
+
+    def analyze_data_availability(self):
+        """Analyze data availability for meal-specific forecasting"""
+        print("\n🔍 Analyzing data availability for meal-specific forecasting...")
+        
+        if self.train_aggregated is None or 'meal_id' not in self.train_aggregated.columns:
+            print("❌ No meal data available for analysis")
             return
         
         availability = {}
-        min_weeks_required = 30  # Minimum weeks needed for Prophet
+        min_weeks_required = 20  # Lower threshold for meal-specific (more realistic)
         
-        # Check overall
+        # Get total weeks for coverage calculation
         overall_weeks = len(self.weekly_demand)
-        availability['overall'] = {
-            'weeks': overall_weeks,
-            'sufficient': overall_weeks >= min_weeks_required,
-            'avg_demand': self.weekly_demand['num_orders'].mean(),
-            'description': f"All regions, all meals ({overall_weeks} weeks)"
-        }
         
-        # Check each region (all meals)
-        for region in ['Region_1', 'Region_2', 'Region_3', 'Region_4']:
-            region_data = self.train_aggregated[self.train_aggregated['region'] == region]
-            if len(region_data) > 0:
-                region_weekly = region_data.groupby('week')['num_orders'].sum().reset_index()
-                weeks_count = len(region_weekly)
-                availability[f"{region}_all"] = {
+        # Check each meal individually (all regions)
+        for meal in sorted(self.train_aggregated['meal_id'].unique()):
+            meal_data = self.train_aggregated[self.train_aggregated['meal_id'] == meal]
+            if len(meal_data) > 0:
+                meal_weekly = meal_data.groupby('week')['num_orders'].sum().reset_index()
+                weeks_count = len(meal_weekly)
+                coverage = weeks_count / overall_weeks
+                
+                availability[f"meal_{meal}"] = {
                     'weeks': weeks_count,
                     'sufficient': weeks_count >= min_weeks_required,
-                    'avg_demand': region_weekly['num_orders'].mean() if weeks_count > 0 else 0,
-                    'description': f"{region}, all meals ({weeks_count} weeks)"
+                    'avg_demand': meal_weekly['num_orders'].mean() if weeks_count > 0 else 0,
+                    'description': f"Meal {meal} - All regions ({weeks_count} weeks, {coverage:.1%} coverage)",
+                    'type': 'meal',
+                    'coverage': coverage
                 }
         
-        # Check each meal (all regions)
-        if 'meal_id' in self.train_aggregated.columns:
-            for meal in sorted(self.train_aggregated['meal_id'].unique()):
-                meal_data = self.train_aggregated[self.train_aggregated['meal_id'] == meal]
-                if len(meal_data) > 0:
-                    meal_weekly = meal_data.groupby('week')['num_orders'].sum().reset_index()
-                    weeks_count = len(meal_weekly)
-                    availability[f"all_{meal}"] = {
-                        'weeks': weeks_count,
-                        'sufficient': weeks_count >= min_weeks_required,
-                        'avg_demand': meal_weekly['num_orders'].mean() if weeks_count > 0 else 0,
-                        'description': f"All regions, meal {meal} ({weeks_count} weeks)"
-                    }
+        # Check meal + region combinations for top meals
+        top_meals = sorted(
+            [k for k, v in availability.items() if k.startswith('meal_') and v['sufficient']], 
+            key=lambda x: availability[x]['avg_demand'], 
+            reverse=True
+        )[:5]  # Top 5 meals only
         
-        # Check specific region + meal combinations (sample the most promising ones)
-        promising_combinations = []
-        if 'meal_id' in self.train_aggregated.columns:
+        for meal_key in top_meals:
+            meal_id = int(meal_key.split('_')[1])
             for region in ['Region_1', 'Region_2', 'Region_3', 'Region_4']:
-                for meal in sorted(self.train_aggregated['meal_id'].unique()):
-                    combo_data = self.train_aggregated[
-                        (self.train_aggregated['region'] == region) & 
-                        (self.train_aggregated['meal_id'] == meal)
-                    ]
-                    if len(combo_data) > 0:
-                        combo_weekly = combo_data.groupby('week')['num_orders'].sum().reset_index()
-                        weeks_count = len(combo_weekly)
-                        if weeks_count >= min_weeks_required:
-                            promising_combinations.append({
-                                'key': f"{region}_{meal}",
-                                'weeks': weeks_count,
-                                'avg_demand': combo_weekly['num_orders'].mean(),
-                                'description': f"{region}, meal {meal} ({weeks_count} weeks)"
-                            })
-        
-        # Add top 5 promising combinations to availability
-        promising_combinations.sort(key=lambda x: x['avg_demand'], reverse=True)
-        for combo in promising_combinations[:5]:
-            availability[combo['key']] = {
-                'weeks': combo['weeks'],
-                'sufficient': True,
-                'avg_demand': combo['avg_demand'],
-                'description': combo['description']
-            }
+                combo_data = self.train_aggregated[
+                    (self.train_aggregated['meal_id'] == meal_id) & 
+                    (self.train_aggregated['region'] == region)
+                ]
+                if len(combo_data) > 0:
+                    combo_weekly = combo_data.groupby('week')['num_orders'].sum().reset_index()
+                    weeks_count = len(combo_weekly)
+                    
+                    if weeks_count >= min_weeks_required:  # Only show viable combinations
+                        availability[f"meal_{meal_id}_{region}"] = {
+                            'weeks': weeks_count,
+                            'sufficient': True,
+                            'avg_demand': combo_weekly['num_orders'].mean(),
+                            'description': f"Meal {meal_id} - {region} ({weeks_count} weeks)",
+                            'type': 'meal_region'
+                        }
         
         self.data_availability = availability
         
         # Print summary
-        print(f"\n📊 Data Availability Summary:")
-        print(f"{'Key':<20} {'Sufficient':<12} {'Weeks':<8} {'Avg Demand':<12} {'Description'}")
-        print("-" * 80)
+        print(f"\n📊 Meal-Specific Forecasting Options:")
+        print(f"{'Option':<25} {'Sufficient':<12} {'Weeks':<8} {'Avg Demand':<12} {'Description'}")
+        print("-" * 85)
         
-        for key, info in availability.items():
-            sufficient_icon = "✅" if info['sufficient'] else "❌"
-            print(f"{key:<20} {sufficient_icon:<12} {info['weeks']:<8} {info['avg_demand']:<12.0f} {info['description']}")
+        # Group by type for better display
+        for category in ['meal', 'meal_region']:
+            category_items = [(k, v) for k, v in availability.items() if v.get('type') == category]
+            if category_items:
+                for key, info in sorted(category_items, key=lambda x: x[1]['avg_demand'], reverse=True):
+                    sufficient_icon = "✅" if info['sufficient'] else "❌"
+                    print(f"{key:<25} {sufficient_icon:<12} {info['weeks']:<8} {info['avg_demand']:<12.0f} {info['description']}")
         
-        # Show recommendations
-        viable_options = [k for k, v in availability.items() if v['sufficient']]
-        print(f"\n✅ Viable forecasting options: {len(viable_options)}")
-        for option in viable_options[:10]:  # Show top 10
-            print(f"   • {option}: {availability[option]['description']}")
-    
-    def get_data_availability(self):
-        """Get data availability information for the frontend"""
-        return self.data_availability
-    
+        # Show summary
+        viable_meals = len([k for k, v in availability.items() if v['sufficient'] and v['type'] == 'meal'])
+        viable_combinations = len([k for k, v in availability.items() if v['sufficient'] and v['type'] == 'meal_region'])
+        
+        print(f"\n✅ Meal Forecasting Summary:")
+        print(f"   • Individual meals available: {viable_meals}")
+        print(f"   • Meal + region combinations: {viable_combinations}")
+        print(f"   • Price regressors available: {'Yes' if self.column_mapping.get('checkout_price') else 'No'}")
+        print(f"🎯 Focus: Meal-specific demand for ingredient ordering")
+
+    def _normalize_model_key(self, region_id=None, meal_id=None):
+        """Create consistent model key"""
+        if meal_id:
+            try:
+                meal_id = int(meal_id)
+            except:
+                meal_id = str(meal_id)
+        
+        if region_id and meal_id:
+            return f"meal_{meal_id}_{region_id}"
+        elif meal_id:
+            return f"meal_{meal_id}"
+        elif region_id:
+            return f"{region_id}_all"
+        else:
+            return "overall"
+
     def train_prophet_model(self, region_id=None, meal_id=None):
-        """Train Prophet model for specific region/meal combination or overall"""
+        """Train Prophet model for specific meal/region with price regressors"""
         try:
+            # Convert inputs
             if region_id:
-                region_id = str(region_id)  # Ensure string
+                region_id = str(region_id)
             if meal_id:
-                # Try both string and int versions
                 try:
-                    meal_id_int = int(meal_id)
+                    meal_id = int(meal_id)
                 except:
-                    meal_id_int = meal_id
-                meal_id = meal_id_int
+                    meal_id = str(meal_id)
             
-            # Create model key
-            if region_id and meal_id:
-                key = f"{region_id}_{meal_id}"
-                print(f"🎯 Training for Region: {region_id}, Meal: {meal_id}")
-                
-                # DEBUG: Check data filtering step by step
-                print(f"🔍 Debug: Starting with {len(self.train_aggregated)} total aggregated records")
-                
-                region_filtered = self.train_aggregated[self.train_aggregated['region'] == region_id]
-                print(f"🔍 Debug: After region filter ({region_id}): {len(region_filtered)} records")
-                
-                if 'meal_id' in self.train_aggregated.columns:
-                    # Try both string and int versions of meal_id
-                    meal_filtered = region_filtered[region_filtered['meal_id'] == meal_id]
-                    if len(meal_filtered) == 0 and isinstance(meal_id, int):
-                        # Try string version
-                        meal_filtered = region_filtered[region_filtered['meal_id'] == str(meal_id)]
-                        print(f"🔍 Debug: Tried string version of meal_id")
-                    elif len(meal_filtered) == 0 and isinstance(meal_id, str):
-                        # Try int version
-                        try:
-                            meal_filtered = region_filtered[region_filtered['meal_id'] == int(meal_id)]
-                            print(f"🔍 Debug: Tried int version of meal_id")
-                        except:
-                            pass
-                    
-                    print(f"🔍 Debug: After meal filter ({meal_id}): {len(meal_filtered)} records")
-                    filtered_data = meal_filtered
-                else:
-                    print(f"🔍 Debug: No meal_id column found")
-                    filtered_data = region_filtered
-                
-                print(f"🔍 Debug: Final filtered data: {len(filtered_data)} records")
-                if len(filtered_data) > 0:
-                    print(f"🔍 Debug: Sample weeks: {sorted(filtered_data['week'].unique())[:10]}")
-                
-                demand_data = filtered_data.groupby('week')['num_orders'].sum().reset_index()
-                
-                # Show which centers are in this region
+            # Create consistent model key
+            model_key = self._normalize_model_key(region_id, meal_id)
+            print(f"🎯 Training model with key: '{model_key}'")
+            
+            # Validate meal selection
+            if not meal_id:
+                return None, "❌ Meal selection required for forecasting. Please select a specific meal."
+            
+            print(f"🎯 Training for Meal {meal_id}" + (f" in {region_id}" if region_id else " (all regions)"))
+            
+            # Filter data
+            if 'meal_id' not in self.train_aggregated.columns:
+                return None, "❌ No meal data available in dataset"
+            
+            filtered_data = self.train_aggregated[self.train_aggregated['meal_id'] == meal_id]
+            
+            if region_id:
+                filtered_data = filtered_data[filtered_data['region'] == region_id]
                 region_centers = [center for center, region in self.regional_mapping.items() if region == region_id]
                 print(f"📍 {region_id} includes centers: {region_centers}")
-                
-            elif region_id:
-                key = f"{region_id}_all"
-                print(f"🎯 Training for Region: {region_id} (all meals)")
-                
-                # DEBUG: Check region filtering
-                print(f"🔍 Debug: Starting with {len(self.train_aggregated)} total aggregated records")
-                filtered_data = self.train_aggregated[self.train_aggregated['region'] == region_id]
-                print(f"🔍 Debug: After region filter ({region_id}): {len(filtered_data)} records")
-                
-                if len(filtered_data) == 0:
-                    print(f"🔍 Debug: Available regions in data: {sorted(self.train_aggregated['region'].unique())}")
-                    print(f"🔍 Debug: Looking for region: '{region_id}' (type: {type(region_id)})")
-                    print(f"🔍 Debug: Region types in data: {[type(r) for r in self.train_aggregated['region'].unique()[:3]]}")
-                
-                if len(filtered_data) > 0:
-                    print(f"🔍 Debug: Sample weeks: {sorted(filtered_data['week'].unique())[:10]}")
-                
-                demand_data = filtered_data.groupby('week')['num_orders'].sum().reset_index()
-                
-                region_centers = [center for center, region in self.regional_mapping.items() if region == region_id]
-                print(f"📍 {region_id} includes centers: {region_centers}")
-                
-            elif meal_id:
-                key = f"all_{meal_id}"
-                print(f"🎯 Training for all regions, Meal: {meal_id}")
-                
-                # DEBUG: Check meal filtering
-                print(f"🔍 Debug: Starting with {len(self.train_aggregated)} total aggregated records")
-                if 'meal_id' in self.train_aggregated.columns:
-                    filtered_data = self.train_aggregated[self.train_aggregated['meal_id'] == meal_id]
-                    print(f"🔍 Debug: After meal filter ({meal_id}): {len(filtered_data)} records")
-                    
-                    if len(filtered_data) == 0:
-                        print(f"🔍 Debug: Available meals: {sorted(self.train_aggregated['meal_id'].unique())[:10]}")
-                        print(f"🔍 Debug: Looking for meal: '{meal_id}' (type: {type(meal_id)})")
-                        print(f"🔍 Debug: Meal types in data: {[type(m) for m in self.train_aggregated['meal_id'].unique()[:3]]}")
-                else:
-                    print(f"🔍 Debug: No meal_id column found!")
-                    filtered_data = pd.DataFrame()  # Empty dataframe
-                
-                demand_data = filtered_data.groupby('week')['num_orders'].sum().reset_index()
-            else:
-                key = "overall"
-                demand_data = self.weekly_demand.copy()
-                print(f"🎯 Training overall model (all regions, all meals)")
             
-            print(f"🔍 Debug: Final demand_data shape: {demand_data.shape}")
-            print(f"🔍 Debug: Final demand_data columns: {list(demand_data.columns)}")
+            print(f"🔍 Debug: Filtered data: {len(filtered_data)} records")
             
-            # ENHANCED: Better insufficient data check with helpful message
-            min_weeks_required = 30
+            if len(filtered_data) == 0:
+                available_meals = sorted(self.train_aggregated['meal_id'].unique())
+                return None, f"❌ No data found for Meal {meal_id}. Available meals: {available_meals[:10]}..."
+            
+            # Aggregate by week
+            demand_data = filtered_data.groupby('week').agg({
+                'num_orders': 'sum',
+                **{col: 'mean' for col in filtered_data.columns 
+                   if col == 'checkout_price' and col in filtered_data.columns}
+            }).reset_index()
+            
+            print(f"🔍 Debug: Weekly data: {len(demand_data)} weeks")
+            
+            # Check for sufficient data
+            min_weeks_required = 20
             if len(demand_data) < min_weeks_required:
-                # Provide helpful suggestion
                 available_weeks = len(demand_data)
+                coverage = available_weeks / len(self.weekly_demand) if len(self.weekly_demand) > 0 else 0
                 
-                # DEBUG: Show what went wrong
-                print(f"❌ Debug: Insufficient data - only {available_weeks} weeks found")
-                print(f"🔍 Debug: Expected at least {min_weeks_required} weeks")
-                
-                # Check if it's a data type issue
-                if region_id:
-                    print(f"🔍 Debug: Looking for region '{region_id}' (type: {type(region_id)})")
-                    unique_regions = self.train_aggregated['region'].unique()
-                    print(f"🔍 Debug: Available regions: {unique_regions} (types: {[type(r) for r in unique_regions]})")
-                
-                if meal_id:
-                    print(f"🔍 Debug: Looking for meal '{meal_id}' (type: {type(meal_id)})")
-                    if 'meal_id' in self.train_aggregated.columns:
-                        unique_meals = self.train_aggregated['meal_id'].unique()
-                        print(f"🔍 Debug: Available meals: {sorted(unique_meals)[:10]} (types: {[type(m) for m in unique_meals[:3]]})")
-                
-                suggestion = self._get_alternative_suggestion(region_id, meal_id, available_weeks)
-                return None, f"Insufficient data: only {available_weeks} weeks available (need {min_weeks_required}+). {suggestion}"
+                suggestion = "Try a different meal or remove region filter"
+                return None, f"❌ Insufficient data: only {available_weeks} weeks available ({coverage:.1%} coverage). Need {min_weeks_required}+. {suggestion}"
             
             # Log the actual week range being used
             min_week = demand_data['week'].min()
             max_week = demand_data['week'].max()
             total_weeks = len(demand_data)
-            print(f"📊 Training data: {total_weeks} weeks (weeks {min_week}-{max_week})")
-            print(f"📈 Demand range: {demand_data['num_orders'].min()}-{demand_data['num_orders'].max()}")
+            coverage = total_weeks / len(self.weekly_demand)
             
-            # Prepare data for Prophet
+            print(f"📊 Training data: {total_weeks} weeks (weeks {min_week}-{max_week})")
+            print(f"📈 Coverage: {coverage:.1%} of total timeline")
+            print(f"📦 Demand range: {demand_data['num_orders'].min()}-{demand_data['num_orders'].max()}")
+            
+            # Prepare data for Prophet with checkout_price regressor
             prophet_data = pd.DataFrame({
                 'ds': pd.to_datetime('2010-01-01') + pd.to_timedelta(demand_data['week'] * 7, unit='D'),
                 'y': demand_data['num_orders']
             })
             
-            # Create and train Prophet model
+            # Add checkout_price regressor if available
+            regressors_added = []
+            
+            if 'checkout_price' in demand_data.columns:
+                prophet_data['checkout_price'] = demand_data['checkout_price'].fillna(demand_data['checkout_price'].mean())
+                regressors_added.append('checkout_price')
+            
+            print(f"💰 Price regressor added: {regressors_added}")
+            
+            # Create and configure Prophet model
             model = Prophet(
                 yearly_seasonality=True,
                 weekly_seasonality=True,
                 daily_seasonality=False,
-                seasonality_mode='multiplicative',
-                changepoint_prior_scale=0.05
+                seasonality_mode='additive',  # Better for meal-specific data
+                changepoint_prior_scale=0.05,
+                uncertainty_samples=1000
             )
             
+            # Add checkout_price regressor
+            for regressor in regressors_added:
+                model.add_regressor(regressor)
+                print(f"   📊 Added regressor: {regressor}")
+            
+            # Train model
             model.fit(prophet_data)
-            self.models[key] = model
+            self.models[model_key] = {
+                'model': model,
+                'regressors': regressors_added,
+                'meal_id': meal_id,
+                'region_id': region_id,
+                'training_weeks': total_weeks,
+                'coverage': coverage,
+                'training_data': prophet_data,  # Store for evaluation
+                'original_data': demand_data     # Store original weekly data
+            }
             
             # Generate predictions on training data for performance visualization
-            self._generate_training_performance(key, model, prophet_data, demand_data)
+            self._generate_training_performance(model_key, model, prophet_data, demand_data)
             
-            return model, f"Model trained successfully for {key}"
+            print(f"✅ Model stored with key: '{model_key}'")
+            return model, f"✅ Meal-specific model trained for {model_key} with checkout_price regressor"
             
         except Exception as e:
             print(f"❌ Training error: {e}")
@@ -442,41 +458,11 @@ class FoodDemandForecaster:
             traceback.print_exc()
             return None, f"Error training model: {str(e)}"
     
-    def _get_alternative_suggestion(self, region_id, meal_id, available_weeks):
-        """Provide helpful suggestions when data is insufficient"""
-        suggestions = []
-        
-        if region_id and meal_id:
-            # Try region-only
-            region_key = f"{region_id}_all"
-            if region_key in self.data_availability and self.data_availability[region_key]['sufficient']:
-                suggestions.append(f"Try '{region_id}' with all meals")
-            
-            # Try meal-only
-            meal_key = f"all_{meal_id}"
-            if meal_key in self.data_availability and self.data_availability[meal_key]['sufficient']:
-                suggestions.append(f"Try 'All Regions' with meal {meal_id}")
-        
-        elif region_id:
-            # Try overall
-            if self.data_availability.get('overall', {}).get('sufficient', False):
-                suggestions.append("Try 'All Regions, All Meals'")
-        
-        elif meal_id:
-            # Try overall
-            if self.data_availability.get('overall', {}).get('sufficient', False):
-                suggestions.append("Try 'All Regions, All Meals'")
-        
-        if suggestions:
-            return "Suggestions: " + " or ".join(suggestions)
-        else:
-            return "Try 'All Regions, All Meals' for maximum data coverage"
-    
     def _generate_training_performance(self, model_key, model, training_data, original_demand_data):
         """Generate predictions on training data for performance visualization"""
         try:
             # Make predictions on the training data
-            predictions = model.predict(training_data[['ds']])
+            predictions = model.predict(training_data[['ds'] + [col for col in training_data.columns if col not in ['ds', 'y']]])
             
             # Use original week numbers and take last 20 for visualization
             actual_weeks = original_demand_data['week'].values
@@ -508,15 +494,50 @@ class FoodDemandForecaster:
     
     def get_training_performance(self, model_key):
         """Get training performance data for visualization"""
-        return self.training_performance.get(model_key, None)
+        # Normalize the model key before lookup
+        normalized_key = model_key
+        if normalized_key not in self.training_performance:
+            # Try different variations
+            alternatives = []
+            if model_key.startswith('all_'):
+                alternatives.append(model_key.replace('all_', 'meal_'))
+            elif model_key.startswith('meal_'):
+                alternatives.append(model_key.replace('meal_', 'all_'))
+            
+            for alt_key in alternatives:
+                if alt_key in self.training_performance:
+                    print(f"🔍 Found training performance with alternative key: {alt_key}")
+                    return self.training_performance[alt_key]
+        
+        return self.training_performance.get(normalized_key, None)
     
     def generate_forecast(self, model_key, weeks_ahead=10, confidence_level=0.95):
-        """Generate forecast using trained Prophet model with custom confidence level"""
+        """Generate forecast using trained Prophet model with price regressors"""
         try:
-            if model_key not in self.models:
-                return None, "Model not found"
+            # Normalize model key and find matching model
+            print(f"🔍 Looking for model: '{model_key}'")
+            print(f"🔍 Available models: {list(self.models.keys())}")
             
-            model = self.models[model_key]
+            if model_key not in self.models:
+                # Try different key formats
+                alternatives = []
+                if model_key.startswith('all_'):
+                    alternatives.append(model_key.replace('all_', 'meal_'))
+                elif model_key.startswith('meal_'):
+                    alternatives.append(model_key.replace('meal_', 'all_'))
+                
+                for alt_key in alternatives:
+                    if alt_key in self.models:
+                        print(f"✅ Found model with alternative key: '{alt_key}'")
+                        model_key = alt_key
+                        break
+                else:
+                    return None, f"Model not found. Available: {list(self.models.keys())}"
+            
+            model_info = self.models[model_key]
+            model = model_info['model']
+            regressors = model_info['regressors']
+            meal_id = model_info['meal_id']
             
             # Create future dataframe
             last_date = model.history['ds'].max()
@@ -528,31 +549,35 @@ class FoodDemandForecaster:
             
             future = pd.DataFrame({'ds': future_dates})
             
-            # Generate forecast with custom confidence interval
+            # Add regressor values for future periods
+            if meal_id in self.meal_price_data:
+                meal_prices = self.meal_price_data[meal_id]
+                
+                # Use recent price trends for future forecasting
+                if 'checkout_price' in regressors:
+                    future['checkout_price'] = meal_prices.get('recent_checkout_price', meal_prices.get('avg_checkout_price', 0))
+                
+                print(f"💰 Using checkout_price regressor for forecast:")
+                for regressor in regressors:
+                    if regressor in future.columns:
+                        print(f"   • {regressor}: ${future[regressor].iloc[0]:.2f}")
+            
+            # Generate forecast
             forecast = model.predict(future)
             
-            # Calculate custom confidence intervals based on user input
-            if confidence_level != 0.8:  # Prophet's default is 80%
+            # Calculate custom confidence intervals if needed
+            if confidence_level != 0.8:
                 print(f"📊 Adjusting confidence intervals to {confidence_level*100}%")
                 
-                # Get the standard Prophet uncertainty (difference from yhat to upper bound)
-                default_uncertainty = forecast['yhat_upper'] - forecast['yhat']
-                
-                # Calculate scaling factor for different confidence levels
-                # Prophet uses 80% by default, so we scale from that
-                from scipy import stats # type: ignore
-                default_z = stats.norm.ppf(0.9)  # 80% CI uses z-score for 90th percentile
-                custom_z = stats.norm.ppf((1 + confidence_level) / 2)  # User's confidence level
+                from scipy import stats
+                default_z = stats.norm.ppf(0.9)
+                custom_z = stats.norm.ppf((1 + confidence_level) / 2)
                 scaling_factor = custom_z / default_z
                 
-                print(f"📈 Scaling factor: {scaling_factor:.3f}")
-                
-                # Apply custom confidence intervals
+                default_uncertainty = forecast['yhat_upper'] - forecast['yhat']
                 custom_uncertainty = default_uncertainty * scaling_factor
                 forecast['yhat_upper'] = forecast['yhat'] + custom_uncertainty
                 forecast['yhat_lower'] = forecast['yhat'] - custom_uncertainty
-                
-                # Ensure lower bound is not negative (orders can't be negative)
                 forecast['yhat_lower'] = np.maximum(forecast['yhat_lower'], 0)
             
             # Store forecast
@@ -560,10 +585,12 @@ class FoodDemandForecaster:
                 'forecast': forecast,
                 'model_key': model_key,
                 'weeks_ahead': weeks_ahead,
-                'confidence_level': confidence_level
+                'confidence_level': confidence_level,
+                'meal_id': meal_id,
+                'regressors_used': regressors
             }
             
-            return forecast, f"Forecast generated successfully with {confidence_level*100}% confidence intervals"
+            return forecast, f"✅ Meal-specific forecast generated for Meal {meal_id} with checkout_price regressor ({confidence_level*100}% CI)"
             
         except Exception as e:
             print(f"❌ Forecast error: {e}")
@@ -572,74 +599,69 @@ class FoodDemandForecaster:
     def evaluate_model_performance(self, model_key):
         """Evaluate Prophet model performance using train data split"""
         try:
-            if model_key not in self.models:
-                return None, "Model not found"
+            print(f"🔍 Evaluating model: '{model_key}'")
+            print(f"🔍 Available models: {list(self.models.keys())}")
             
-            model = self.models[model_key]
-            target_col = self.column_mapping.get('target', 'num_orders')
-            week_col = self.column_mapping.get('week', 'week')
+            # Normalize model key and find matching model
+            if model_key not in self.models:
+                # Try different key formats
+                alternatives = []
+                if model_key.startswith('all_'):
+                    alternatives.append(model_key.replace('all_', 'meal_'))
+                elif model_key.startswith('meal_'):
+                    alternatives.append(model_key.replace('meal_', 'all_'))
+                
+                for alt_key in alternatives:
+                    if alt_key in self.models:
+                        print(f"✅ Found model with alternative key: '{alt_key}'")
+                        model_key = alt_key
+                        break
+                else:
+                    return None, f"Model not found. Available: {list(self.models.keys())}"
+            
+            model_info = self.models[model_key]
+            model = model_info['model']
+            meal_id = model_info['meal_id']
+            region_id = model_info.get('region_id')
             
             print(f"🔍 Evaluating model: {model_key}")
-            print(f"⚠️ Using train data split for evaluation (test.csv has no target column)")
             
-            # Get the correct filtered data based on model type
-            if model_key == "overall":
-                # Use the full weekly demand data
-                train_weekly = self.weekly_demand[['week', 'num_orders']].copy()
-                print(f"📊 Overall model: using full dataset")
-            else:
-                parts = model_key.split('_')
-                region_id = parts[0] if parts[0] not in ['all', 'overall'] else None
-                meal_id = parts[1] if len(parts) > 1 and parts[1] != 'all' else None
-                
-                print(f"🎯 Filtering for region: {region_id}, meal: {meal_id}")
-                
-                # Start with the aggregated data
-                if region_id and meal_id:
-                    filtered_data = self.train_aggregated[
-                        (self.train_aggregated['region'] == region_id) & 
-                        (self.train_aggregated['meal_id'] == meal_id)
-                    ]
-                elif region_id:
-                    filtered_data = self.train_aggregated[self.train_aggregated['region'] == region_id]
-                elif meal_id:
-                    filtered_data = self.train_aggregated[self.train_aggregated['meal_id'] == meal_id]
-                else:
-                    filtered_data = self.train_aggregated
-                
-                # Aggregate by week
-                train_weekly = filtered_data.groupby('week')['num_orders'].sum().reset_index()
-                
-                if region_id:
-                    region_centers = [center for center, region in self.regional_mapping.items() if region == region_id]
-                    print(f"📍 Region {region_id} includes centers: {region_centers}")
+            # Get stored training data
+            training_data = model_info.get('training_data')
+            original_data = model_info.get('original_data')
             
-            # Use last 20% of available data for evaluation
-            total_weeks = len(train_weekly)
+            if training_data is None or original_data is None:
+                return None, "No training data available for evaluation"
+            
+            # Use last 20% for evaluation
+            total_weeks = len(original_data)
             eval_size = max(5, int(total_weeks * 0.2))
-            eval_data = train_weekly.tail(eval_size).copy()
+            eval_indices = list(range(total_weeks - eval_size, total_weeks))
             
-            if len(eval_data) == 0:
+            eval_data_prophet = training_data.iloc[eval_indices].copy()
+            eval_data_original = original_data.iloc[eval_indices].copy()
+            
+            if len(eval_data_prophet) == 0:
                 return None, "No evaluation data available"
             
             # Log the actual evaluation period
-            eval_min_week = eval_data['week'].min()
-            eval_max_week = eval_data['week'].max()
-            print(f"📊 Total available weeks: {total_weeks} (weeks {train_weekly['week'].min()}-{train_weekly['week'].max()})")
-            print(f"📈 Using {len(eval_data)} weeks for evaluation (weeks {eval_min_week}-{eval_max_week})")
+            eval_min_week = eval_data_original['week'].min()
+            eval_max_week = eval_data_original['week'].max()
+            print(f"📊 Total available weeks: {total_weeks} (weeks {original_data['week'].min()}-{original_data['week'].max()})")
+            print(f"📈 Using {len(eval_data_prophet)} weeks for evaluation (weeks {eval_min_week}-{eval_max_week})")
             
-            # Create evaluation dates
-            eval_data_prophet = pd.DataFrame({
-                'ds': pd.to_datetime('2010-01-01') + pd.to_timedelta(eval_data['week'] * 7, unit='D'),
-                'y': eval_data['num_orders']
-            })
+            # Add regressors for evaluation
+            regressors = model_info['regressors']
+            for regressor in regressors:
+                if regressor in eval_data_original.columns:
+                    eval_data_prophet[regressor] = eval_data_original[regressor].fillna(eval_data_original[regressor].mean())
             
             # Make predictions
-            predictions = model.predict(eval_data_prophet[['ds']])
+            predictions = model.predict(eval_data_prophet[['ds'] + regressors])
             
             # Calculate metrics
             y_true = eval_data_prophet['y'].values
-            y_pred = np.maximum(predictions['yhat'].values, 0)  # Handle negative predictions
+            y_pred = np.maximum(predictions['yhat'].values, 0)
             
             print(f"📊 Predictions range: {y_pred.min():.1f} - {y_pred.max():.1f}")
             print(f"📊 Actual range: {y_true.min()} - {y_true.max()}")
@@ -663,10 +685,13 @@ class FoodDemandForecaster:
                 'test_samples': len(y_true),
                 'predictions_positive': int(np.sum(y_pred > 0)),
                 'total_weeks_used': total_weeks,
-                'evaluation_weeks': f"{eval_min_week}-{eval_max_week}"
+                'evaluation_weeks': f"{eval_min_week}-{eval_max_week}",
+                'meal_id': meal_id,
+                'region_id': region_id,
+                'regressors_used': len(regressors)
             }
             
-            print(f"✅ Metrics calculated:")
+            print(f"✅ Metrics calculated for Meal {meal_id}:")
             for key, value in metrics.items():
                 if isinstance(value, (int, float)):
                     print(f"   {key}: {value:.2f}")
@@ -675,13 +700,17 @@ class FoodDemandForecaster:
             
             self.performance_metrics[model_key] = metrics
             
-            return metrics, f"Model evaluation completed using weeks {eval_min_week}-{eval_max_week}"
+            return metrics, f"Model evaluation completed for Meal {meal_id} using weeks {eval_min_week}-{eval_max_week}"
             
         except Exception as e:
             print(f"❌ Evaluation error: {e}")
             import traceback
             traceback.print_exc()
             return None, f"Error evaluating model: {str(e)}"
+    
+    def get_data_availability(self):
+        """Get data availability information for the frontend"""
+        return self.data_availability
     
     def get_model_summary(self):
         """Get summary of all trained models and their performance"""
@@ -692,19 +721,27 @@ class FoodDemandForecaster:
                 'train_records': len(self.train_data) if self.train_data is not None else 0,
                 'test_records': len(self.test_data) if self.test_data is not None else 0,
                 'regions': ['Region_1', 'Region_2', 'Region_3', 'Region_4'],
-                'meals': list(self.train_data['meal_id'].unique()) if self.train_data is not None else [],
+                'meals': list(self.train_data['meal_id'].unique()) if self.train_data is not None and 'meal_id' in self.train_data.columns else [],
                 'weeks_range': [
                     int(self.train_data['week'].min()) if self.train_data is not None else 0,
                     int(self.train_data['week'].max()) if self.train_data is not None else 0
-                ]
+                ],
+                'has_price_data': bool(self.column_mapping.get('checkout_price')),
+                'price_regressors_available': ['checkout_price'] if self.column_mapping.get('checkout_price') else []
             },
-            'data_availability': self.data_availability  # Include availability info
+            'data_availability': self.data_availability
         }
         
         for key in self.models.keys():
+            model_info = self.models[key]
             summary['models'][key] = {
                 'performance': self.performance_metrics.get(key, {}),
-                'has_forecast': key in self.forecasts
+                'has_forecast': key in self.forecasts,
+                'meal_id': model_info.get('meal_id'),
+                'region_id': model_info.get('region_id'),
+                'regressors': model_info.get('regressors', []),
+                'training_weeks': model_info.get('training_weeks', 0),
+                'coverage': model_info.get('coverage', 0)
             }
         
         return summary

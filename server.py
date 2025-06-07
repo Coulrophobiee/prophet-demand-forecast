@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Web Server for Prophet Food Demand Forecasting Dashboard
-API endpoints for model training, forecasting, evaluation, and data availability
+Fixed version with proper model key handling
 """
 
 import http.server
@@ -63,45 +63,55 @@ class ForecastingHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
             self.wfile.write(error_html.encode())
     
     def handle_train_model(self, query):
-        """Handle model training API endpoint"""
+        """Handle model training API endpoint with proper key handling"""
         params = parse_qs(query)
         region_id = params.get('region', [None])[0]
         meal_id = params.get('meal', [None])[0]
         
-        # Create consistent model key
-        if region_id and meal_id:
-            model_key = f"{region_id}_{meal_id}"
-        elif region_id:
-            model_key = f"{region_id}_all"
-        elif meal_id:
-            model_key = f"all_{meal_id}"
-        else:
-            model_key = "overall"
-        
-        print(f"🎯 Training model with key: '{model_key}'")
-        print(f"📋 Parameters: region={region_id}, meal={meal_id}")
+        print(f"🎯 API Training request:")
+        print(f"📋 Raw parameters: region={region_id}, meal={meal_id}")
         
         # Train the model
         model, message = forecaster.train_prophet_model(region_id, meal_id)
         
+        # Get the actual model key from forecaster
+        actual_model_key = forecaster._normalize_model_key(region_id, meal_id)
+        print(f"🔑 Actual model key: '{actual_model_key}'")
+        print(f"🔍 Available models after training: {list(forecaster.models.keys())}")
+        
         if model:
-            # Try to evaluate the model
+            # Try to evaluate the model using the actual key
             try:
-                metrics, eval_message = forecaster.evaluate_model_performance(model_key)
-                response = {
-                    'success': True,
-                    'message': message,
-                    'evaluation': eval_message,
-                    'metrics': metrics,
-                    'model_key': model_key
-                }
+                print(f"🔍 Attempting evaluation with key: '{actual_model_key}'")
+                metrics, eval_message = forecaster.evaluate_model_performance(actual_model_key)
+                
+                if metrics:
+                    response = {
+                        'success': True,
+                        'message': message,
+                        'evaluation': eval_message,
+                        'metrics': metrics,
+                        'model_key': actual_model_key
+                    }
+                    print(f"✅ Training and evaluation successful")
+                else:
+                    response = {
+                        'success': True,
+                        'message': message,
+                        'evaluation': f"Model trained successfully, but evaluation failed: {eval_message}",
+                        'metrics': None,
+                        'model_key': actual_model_key
+                    }
+                    print(f"⚠️ Training successful, evaluation failed")
+                    
             except Exception as e:
+                print(f"❌ Evaluation error: {e}")
                 response = {
                     'success': True,
                     'message': message,
                     'evaluation': f"Model trained successfully, but evaluation failed: {str(e)}",
                     'metrics': None,
-                    'model_key': model_key
+                    'model_key': actual_model_key
                 }
         else:
             response = {
@@ -109,6 +119,7 @@ class ForecastingHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
                 'message': message,
                 'metrics': None
             }
+            print(f"❌ Training failed: {message}")
         
         self.send_json_response(response)
     
@@ -123,30 +134,17 @@ class ForecastingHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
         print(f"📋 Available models: {list(forecaster.models.keys())}")
         print(f"📊 Confidence level: {confidence*100}%")
         
-        # Try different model key formats if exact match not found
-        if model_key not in forecaster.models:
-            alternatives = ["overall", "all_all"]
-            for alt_key in alternatives:
-                if alt_key in forecaster.models:
-                    print(f"✅ Found model with alternative key: '{alt_key}'")
-                    model_key = alt_key
-                    break
-            else:
-                if forecaster.models:
-                    model_key = list(forecaster.models.keys())[0]
-                    print(f"⚠️ Using first available model: '{model_key}'")
-                else:
-                    response = {
-                        'success': False,
-                        'message': 'No trained models available. Please train a model first.'
-                    }
-                    self.send_json_response(response)
-                    return
-        
-        # Generate forecast with custom confidence level
+        # Generate forecast with the provided model key
         forecast, message = forecaster.generate_forecast(model_key, weeks, confidence)
         
         if forecast is not None:
+            # Get the actual model info to extract meal_id
+            model_info = None
+            for key, info in forecaster.models.items():
+                if key == model_key or key.replace('meal_', 'all_') == model_key or key.replace('all_', 'meal_') == model_key:
+                    model_info = info
+                    break
+            
             # Convert forecast to JSON-serializable format
             forecast_data = {
                 'weeks': list(range(1, weeks + 1)),
@@ -154,7 +152,8 @@ class ForecastingHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
                 'upper': forecast['yhat_upper'].round().astype(int).tolist(),
                 'lower': forecast['yhat_lower'].round().astype(int).tolist(),
                 'trend': forecast['trend'].round().astype(int).tolist(),
-                'confidence_level': confidence * 100
+                'confidence_level': confidence * 100,
+                'meal_id': model_info['meal_id'] if model_info else None  # Add meal_id to response
             }
             
             response = {
@@ -163,11 +162,13 @@ class ForecastingHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
                 'forecast': forecast_data,
                 'model_used': model_key
             }
+            print(f"✅ Forecast generated successfully")
         else:
             response = {
                 'success': False,
                 'message': message
             }
+            print(f"❌ Forecast failed: {message}")
         
         self.send_json_response(response)
     
@@ -177,6 +178,7 @@ class ForecastingHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
         model_key = params.get('model', ['overall'])[0]
         
         print(f"📊 Training performance request for model: '{model_key}'")
+        print(f"🔍 Available training performance data: {list(forecaster.training_performance.keys())}")
         
         # Get training performance data
         performance_data = forecaster.get_training_performance(model_key)
@@ -187,11 +189,13 @@ class ForecastingHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
                 'message': f'Training performance data retrieved for {model_key}',
                 'performance': performance_data
             }
+            print(f"✅ Training performance data found")
         else:
             response = {
                 'success': False,
                 'message': f'No training performance data available for model {model_key}'
             }
+            print(f"❌ No training performance data available")
         
         self.send_json_response(response)
     
@@ -212,6 +216,8 @@ class ForecastingHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
         params = parse_qs(query)
         model_key = params.get('model', ['overall'])[0]
         
+        print(f"🔍 Evaluation request for model: '{model_key}'")
+        
         metrics, message = forecaster.evaluate_model_performance(model_key)
         
         response = {
@@ -219,6 +225,11 @@ class ForecastingHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
             'message': message,
             'metrics': metrics
         }
+        
+        if metrics:
+            print(f"✅ Evaluation successful")
+        else:
+            print(f"❌ Evaluation failed: {message}")
         
         self.send_json_response(response)
     

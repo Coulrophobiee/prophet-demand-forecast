@@ -72,10 +72,14 @@
         .chart-container {
             background: white; padding: 25px; border-radius: 15px;
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            min-height: 400px;
         }
         .chart-container h3 {
             text-align: center; margin-bottom: 20px;
             color: #333; font-size: 1.3rem;
+        }
+        .chart-container canvas {
+            max-height: 350px;
         }
         .full-width { grid-column: 1 / -1; }
         .performance-section {
@@ -110,16 +114,14 @@
             border-radius: 50%; width: 40px; height: 40px;
             animation: spin 2s linear infinite; margin: 0 auto 10px;
         }
-        .data-availability {
-            background: white; padding: 20px; border-radius: 15px; 
-            margin-bottom: 30px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+        .debug-info {
+            background: #f8f9fa; padding: 15px; border-radius: 10px;
+            margin: 20px 0; font-family: monospace; font-size: 12px;
+            border-left: 4px solid #007bff;
         }
-        .viable-option, .insufficient-option {
-            transition: all 0.3s ease;
-        }
-        .viable-option:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 20px rgba(59, 130, 246, 0.3);
+        .error-message {
+            background: #ffe6e6; color: #d63384; padding: 15px;
+            border-radius: 10px; margin: 10px 0; border-left: 4px solid #d63384;
         }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         @media (max-width: 768px) {
@@ -141,16 +143,22 @@
             <p id="statusMessage">Loading data and initializing Prophet models...</p>
         </div>
 
+        <!-- Debug Information -->
+        <div class="debug-info" id="debugInfo" style="display: none;">
+            <h4>🔍 Debug Information</h4>
+            <div id="debugContent"></div>
+        </div>
+
         <div class="controls">
             <div class="control-group">
-                <label for="regionSelect">Region:</label>
-                <select id="regionSelect"><option value="">All Regions</option></select>
-                <small id="regionInfo" style="color: #666; font-size: 0.8rem; margin-top: 4px;"></small>
+                <label for="mealSelect">Meal (Required):</label>
+                <select id="mealSelect"><option value="">Select a specific meal...</option></select>
+                <small id="mealInfo" style="color: #666; font-size: 0.8rem; margin-top: 4px;"></small>
             </div>
             <div class="control-group">
-                <label for="mealSelect">Meal Category:</label>
-                <select id="mealSelect"><option value="">All Meals</option></select>
-                <small id="mealInfo" style="color: #666; font-size: 0.8rem; margin-top: 4px;"></small>
+                <label for="regionSelect">Region (Optional):</label>
+                <select id="regionSelect"><option value="">All Regions</option></select>
+                <small id="regionInfo" style="color: #666; font-size: 0.8rem; margin-top: 4px;"></small>
             </div>
             <div class="control-group">
                 <label for="forecastWeeks">Forecast Weeks:</label>
@@ -166,11 +174,9 @@
             <div class="control-group">
                 <button class="btn" onclick="generateForecast()" id="forecastBtn" disabled>Generate Forecast</button>
             </div>
-        </div>
-
-        <div class="data-availability" id="dataAvailabilitySection" style="display: none;">
-            <h3>📊 Data Availability Analysis</h3>
-            <div id="availabilityContent"></div>
+            <div class="control-group">
+                <button class="btn" onclick="toggleDebug()" id="debugBtn">Show Debug Info</button>
+            </div>
         </div>
 
         <div class="loading" id="loadingSection">
@@ -229,140 +235,122 @@
         let currentTrainingPerformance = null;
         let dataAvailability = null;
         let forecastChart = null, performanceChart = null, accuracyChart = null;
+        let debugMode = false;
+
+        // Debug logging function
+        function debugLog(message, data = null) {
+            const timestamp = new Date().toLocaleTimeString();
+            const logMessage = `[${timestamp}] ${message}`;
+            console.log(logMessage, data || '');
+            
+            if (debugMode) {
+                const debugContent = document.getElementById('debugContent');
+                const logEntry = document.createElement('div');
+                logEntry.innerHTML = `<strong>${timestamp}:</strong> ${message}`;
+                if (data) {
+                    logEntry.innerHTML += `<br><pre>${JSON.stringify(data, null, 2)}</pre>`;
+                }
+                debugContent.appendChild(logEntry);
+                debugContent.scrollTop = debugContent.scrollHeight;
+            }
+        }
+
+        function toggleDebug() {
+            debugMode = !debugMode;
+            const debugInfo = document.getElementById('debugInfo');
+            const debugBtn = document.getElementById('debugBtn');
+            
+            if (debugMode) {
+                debugInfo.style.display = 'block';
+                debugBtn.textContent = 'Hide Debug Info';
+                debugLog('Debug mode enabled');
+            } else {
+                debugInfo.style.display = 'none';
+                debugBtn.textContent = 'Show Debug Info';
+            }
+        }
+
+        function showError(message, error = null) {
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'error-message';
+            errorDiv.innerHTML = `<strong>Error:</strong> ${message}`;
+            if (error) {
+                errorDiv.innerHTML += `<br><small>${error}</small>`;
+            }
+            
+            document.querySelector('.container').insertBefore(errorDiv, document.querySelector('.controls'));
+            
+            // Remove error after 10 seconds
+            setTimeout(() => {
+                if (errorDiv.parentNode) {
+                    errorDiv.parentNode.removeChild(errorDiv);
+                }
+            }, 10000);
+        }
 
         document.addEventListener('DOMContentLoaded', function() {
+            debugLog('DOM loaded, initializing system');
             loadSystemStatus();
-            // Add event listeners for dropdown changes
             document.getElementById('regionSelect').addEventListener('change', updateSelectionInfo);
             document.getElementById('mealSelect').addEventListener('change', updateSelectionInfo);
         });
 
         async function loadSystemStatus() {
             try {
+                debugLog('Loading system status...');
                 const response = await fetch('/api/summary');
                 const data = await response.json();
+                debugLog('System status loaded', data);
+                
                 updateStatusSection(data);
                 populateSelectors(data);
                 
-                // Load data availability
                 await loadDataAvailability();
             } catch (error) {
+                debugLog('Error loading system status', error);
                 document.getElementById('statusMessage').textContent = 
                     '❌ Error: Could not load data. Make sure train.csv and test.csv are in the same directory.';
+                showError('Could not connect to backend server. Make sure the Python server is running.', error.message);
             }
         }
 
-        // Load data availability information
         async function loadDataAvailability() {
             try {
+                debugLog('Loading data availability...');
                 const response = await fetch('/api/data_availability');
                 const data = await response.json();
                 
                 if (data.success) {
                     dataAvailability = data.availability;
-                    displayDataAvailability();
-                    updateSelectionInfo(); // Update info when page loads
+                    debugLog('Data availability loaded', dataAvailability);
+                    updateSelectionInfo();
                 } else {
+                    debugLog('Could not load data availability', data);
                     console.warn('Could not load data availability');
                 }
             } catch (error) {
+                debugLog('Error loading data availability', error);
                 console.error('Error loading data availability:', error);
             }
         }
 
-        // Display data availability information
-        function displayDataAvailability() {
-            if (!dataAvailability) return;
-            
-            const section = document.getElementById('dataAvailabilitySection');
-            const content = document.getElementById('availabilityContent');
-            
-            let html = '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 15px; margin-top: 15px;">';
-            
-            // Show viable options
-            const viableOptions = Object.entries(dataAvailability)
-                .filter(([key, info]) => info.sufficient)
-                .sort((a, b) => b[1].avg_demand - a[1].avg_demand) // Sort by demand
-                .slice(0, 8); // Show top 8
-            
-            viableOptions.forEach(([key, info]) => {
-                const statusIcon = info.sufficient ? '✅' : '❌';
-                const cardClass = info.sufficient ? 'viable-option' : 'insufficient-option';
-                
-                html += `
-                    <div class="${cardClass}" style="background: ${info.sufficient ? '#f0f9ff' : '#fef2f2'}; border: 2px solid ${info.sufficient ? '#3b82f6' : '#ef4444'}; border-radius: 10px; padding: 15px; cursor: ${info.sufficient ? 'pointer' : 'default'};" onclick="${info.sufficient ? `selectOption('${key}')` : ''}">
-                        <div style="font-weight: bold; color: #333; margin-bottom: 8px;">
-                            ${statusIcon} ${info.description}
-                        </div>
-                        <div style="font-size: 0.9rem; color: #666;">
-                            <div>📅 Weeks: ${info.weeks}</div>
-                            <div>📊 Avg Demand: ${Math.round(info.avg_demand).toLocaleString()}</div>
-                        </div>
-                    </div>
-                `;
-            });
-            
-            html += '</div>';
-            
-            // Add insufficient data warning if needed
-            const insufficientOptions = Object.entries(dataAvailability)
-                .filter(([key, info]) => !info.sufficient).length;
-            
-            if (insufficientOptions > 0) {
-                html += `<div style="margin-top: 15px; padding: 10px; background: #fef2f2; border-radius: 8px; border-left: 4px solid #ef4444;">
-                    <strong>⚠️ Note:</strong> ${insufficientOptions} combinations have insufficient data (&lt;30 weeks) for reliable Prophet forecasting.
-                </div>`;
-            }
-            
-            content.innerHTML = html;
-            section.style.display = 'block';
-        }
-
-        // Quick selection of viable options
-        function selectOption(key) {
-            const parts = key.split('_');
-            
-            if (key === 'overall') {
-                document.getElementById('regionSelect').value = '';
-                document.getElementById('mealSelect').value = '';
-            } else if (parts[1] === 'all') {
-                // Region selected, all meals
-                document.getElementById('regionSelect').value = parts[0];
-                document.getElementById('mealSelect').value = '';
-            } else if (parts[0] === 'all') {
-                // All regions, specific meal
-                document.getElementById('regionSelect').value = '';
-                document.getElementById('mealSelect').value = parts[1];
-            } else {
-                // Specific region and meal
-                document.getElementById('regionSelect').value = parts[0];
-                document.getElementById('mealSelect').value = parts[1];
-            }
-            
-            updateSelectionInfo();
-            showStatusMessage(`✅ Selected: ${dataAvailability[key].description}`, 'success');
-        }
-
-        // Update selection info when user changes dropdowns
         function updateSelectionInfo() {
             if (!dataAvailability) return;
             
             const region = document.getElementById('regionSelect').value;
             const meal = document.getElementById('mealSelect').value;
             
-            // Determine the key for current selection
             let currentKey;
             if (region && meal) {
-                currentKey = `${region}_${meal}`;
-            } else if (region) {
-                currentKey = `${region}_all`;
+                currentKey = `meal_${meal}_${region}`;
             } else if (meal) {
-                currentKey = `all_${meal}`;
+                currentKey = `meal_${meal}`;
             } else {
                 currentKey = 'overall';
             }
             
-            // Update info displays
+            debugLog('Selection updated', { region, meal, currentKey });
+            
             const regionInfo = document.getElementById('regionInfo');
             const mealInfo = document.getElementById('mealInfo');
             
@@ -385,7 +373,6 @@
                     mealInfo.textContent = '';
                 }
                 
-                // Update train button state
                 const trainBtn = document.getElementById('trainBtn');
                 if (info.sufficient) {
                     trainBtn.style.opacity = '1';
@@ -428,7 +415,11 @@
         async function trainModel() {
             const region = document.getElementById('regionSelect').value;
             const meal = document.getElementById('mealSelect').value;
-            showLoading(true); disableButtons(true);
+            
+            debugLog('Training model started', { region, meal });
+            
+            showLoading(true); 
+            disableButtons(true);
             
             try {
                 let url = '/api/train';
@@ -437,16 +428,18 @@
                 if (meal) params.append('meal', meal);
                 if (params.toString()) url += '?' + params.toString();
                 
+                debugLog('Making training request', { url });
+                
                 const response = await fetch(url);
                 const data = await response.json();
-                console.log('Training response:', data);
+                
+                debugLog('Training response received', data);
                 
                 if (data.success && data.metrics) {
                     currentModel = data.model_key || `${region || 'all'}_${meal || 'all'}`;
                     if (currentModel === 'all_all') currentModel = 'overall';
                     currentMetrics = data.metrics;
                     
-                    // Load training performance data
                     await loadTrainingPerformance(currentModel);
                     
                     showPerformanceSection(data.metrics);
@@ -456,69 +449,99 @@
                     currentModel = data.model_key || `${region || 'all'}_${meal || 'all'}`;
                     if (currentModel === 'all_all') currentModel = 'overall';
                     
-                    // Load training performance data
                     await loadTrainingPerformance(currentModel);
                     
                     document.getElementById('forecastBtn').disabled = false;
                     showStatusMessage('✅ Prophet model trained successfully! (Evaluation data unavailable)', 'success');
                 } else {
+                    debugLog('Training failed', data);
                     showStatusMessage('❌ ' + (data.message || 'Training failed'), 'error');
+                    showError('Training failed', data.message);
                 }
             } catch (error) {
+                debugLog('Training error', error);
                 console.error('Training error:', error);
                 showStatusMessage('❌ Error training model: ' + error.message, 'error');
+                showError('Training request failed', error.message);
             }
-            showLoading(false); disableButtons(false);
+            showLoading(false); 
+            disableButtons(false);
         }
 
-        // Load training performance data
         async function loadTrainingPerformance(modelKey) {
             try {
+                debugLog('Loading training performance', { modelKey });
                 const response = await fetch(`/api/training_performance?model=${encodeURIComponent(modelKey)}`);
                 const data = await response.json();
                 
                 if (data.success) {
                     currentTrainingPerformance = data.performance;
-                    console.log('Training performance loaded:', currentTrainingPerformance);
+                    debugLog('Training performance loaded', currentTrainingPerformance);
                 } else {
-                    console.warn('No training performance data available:', data.message);
+                    debugLog('No training performance data available', data.message);
                     currentTrainingPerformance = null;
                 }
             } catch (error) {
+                debugLog('Error loading training performance', error);
                 console.error('Error loading training performance:', error);
                 currentTrainingPerformance = null;
             }
         }
 
         async function generateForecast() {
-            if (!currentModel) { alert('Please train a model first!'); return; }
+            if (!currentModel) { 
+                alert('Please train a model first!'); 
+                return; 
+            }
+            
             const weeks = document.getElementById('forecastWeeks').value;
             const confidence = document.getElementById('confidence').value;
+            
+            debugLog('Generating forecast', { model: currentModel, weeks, confidence });
+            
             showLoading(true);
             
             try {
                 const response = await fetch(`/api/forecast?model=${encodeURIComponent(currentModel)}&weeks=${weeks}&confidence=${confidence}`);
                 const data = await response.json();
-                console.log('Forecast response:', data);
+                
+                debugLog('Forecast response received', data);
                 
                 if (data.success) {
-                    currentForecast = data.forecast; updateDashboard();
+                    currentForecast = data.forecast; 
+                    // Add meal_id to forecast data if it exists in metrics
+                    if (currentMetrics && currentMetrics.meal_id) {
+                        currentForecast.meal_id = currentMetrics.meal_id;
+                    }
+                    updateDashboard();
                     showStatusMessage(`✅ Forecast generated with ${confidence}% confidence intervals!`, 'success');
                 } else {
+                    debugLog('Forecast failed', data);
                     showStatusMessage('❌ ' + (data.message || 'Forecast generation failed'), 'error');
+                    showError('Forecast generation failed', data.message);
                 }
             } catch (error) {
+                debugLog('Forecast error', error);
                 console.error('Forecast error:', error);
                 showStatusMessage('❌ Error generating forecast: ' + error.message, 'error');
+                showError('Forecast request failed', error.message);
             }
             showLoading(false);
         }
 
         function showPerformanceSection(metrics) {
             if (!metrics) return;
+            
+            debugLog('Showing performance section', metrics);
+            
             const section = document.getElementById('performanceSection');
             const grid = document.getElementById('performanceGrid');
             grid.innerHTML = '';
+            
+            const title = section.querySelector('h3');
+            if (metrics.meal_id) {
+                title.textContent = `🎯 Model Performance Evaluation - Meal ${metrics.meal_id}${metrics.region_id ? ` (${metrics.region_id})` : ''}`;
+            }
             
             const metricsConfig = [
                 { key: 'accuracy', label: 'Accuracy', format: val => val != null ? val.toFixed(1) + '%' : 'N/A' },
@@ -526,7 +549,9 @@
                 { key: 'rmse', label: 'RMSE', format: val => val != null ? val.toFixed(0) : 'N/A' },
                 { key: 'r2', label: 'R² Score', format: val => val != null ? val.toFixed(3) : 'N/A' },
                 { key: 'mape', label: 'MAPE', format: val => val != null ? val.toFixed(1) + '%' : 'N/A' },
-                { key: 'bias', label: 'Bias', format: val => val != null ? val.toFixed(0) : 'N/A' }
+                { key: 'bias', label: 'Bias', format: val => val != null ? val.toFixed(0) : 'N/A' },
+                { key: 'total_weeks_used', label: 'Training Weeks', format: val => val != null ? val.toString() : 'N/A' },
+                { key: 'regressors_used', label: 'Price Regressors', format: val => val != null ? val.toString() : 'N/A' }
             ];
             
             metricsConfig.forEach(config => {
@@ -536,12 +561,23 @@
                 item.innerHTML = `<div class="value">${config.format(value)}</div><div class="label">${config.label}</div>`;
                 grid.appendChild(item);
             });
+            
+            if (metrics.evaluation_weeks) {
+                const evalItem = document.createElement('div');
+                evalItem.className = 'performance-item';
+                evalItem.innerHTML = `<div class="value">${metrics.evaluation_weeks}</div><div class="label">Evaluation Period</div>`;
+                grid.appendChild(evalItem);
+            }
+            
             section.style.display = 'block';
         }
 
         function updateDashboard() {
             if (!currentForecast) return;
             
+            debugLog('Updating dashboard', { forecast: currentForecast, metrics: currentMetrics });
+            
+            // Update metric cards
             if (currentMetrics && currentMetrics.accuracy != null) {
                 document.getElementById('modelAccuracy').textContent = currentMetrics.accuracy.toFixed(1) + '%';
             } else {
@@ -555,65 +591,164 @@
             document.getElementById('avgDemand').textContent = avgDemand.toLocaleString();
             document.getElementById('totalForecast').textContent = totalForecast.toLocaleString();
             document.getElementById('confidenceLevel').textContent = confidenceLevel + '%';
+            
+            if (currentForecast.meal_id) {
+                const cards = document.querySelectorAll('.metric-card p');
+                if (cards.length >= 4) {
+                    cards[0].textContent = `Meal ${currentForecast.meal_id} Accuracy`;
+                    cards[1].textContent = `Avg Weekly Demand`;
+                    cards[2].textContent = `Total Forecast`;
+                    cards[3].textContent = `Confidence Level`;
+                }
+            }
+            
             document.getElementById('metricsContainer').style.display = 'grid';
             
-            updateForecastChart(); updatePerformanceChart(); updateAccuracyChart();
-            showInsights(); document.getElementById('insights').style.display = 'block';
+            // Update charts with error handling
+            try {
+                updateForecastChart();
+            } catch (error) {
+                debugLog('Error updating forecast chart', error);
+                showError('Error updating forecast chart', error.message);
+            }
+            
+            try {
+                updatePerformanceChart();
+            } catch (error) {
+                debugLog('Error updating performance chart', error);
+                showError('Error updating performance chart', error.message);
+            }
+            
+            try {
+                updateAccuracyChart();
+            } catch (error) {
+                debugLog('Error updating accuracy chart', error);
+                showError('Error updating accuracy chart', error.message);
+            }
+            
+            showInsights(); 
+            document.getElementById('insights').style.display = 'block';
         }
 
         function updateForecastChart() {
-            const ctx = document.getElementById('forecastChart').getContext('2d');
-            if (forecastChart) forecastChart.destroy();
+            debugLog('Updating forecast chart');
+            
+            const ctx = document.getElementById('forecastChart');
+            if (!ctx) {
+                debugLog('Forecast chart canvas not found');
+                return;
+            }
+            
+            const chartContext = ctx.getContext('2d');
+            if (forecastChart) {
+                forecastChart.destroy();
+                forecastChart = null;
+            }
 
             const confidenceLevel = document.getElementById('confidence').value;
             const forecastWeeks = currentForecast.weeks.length;
+            const mealId = currentForecast.meal_id || 'Unknown';
             
-            // Create meaningful labels with actual week numbers
-            const lastTrainWeek = 145; // Based on your data going to week 145
+            const lastTrainWeek = 145;
             const labels = currentForecast.weeks.map(w => `Week ${lastTrainWeek + w}`);
 
-            forecastChart = new Chart(ctx, {
-                type: 'line', data: {
-                    labels: labels, datasets: [{
-                        label: 'Prophet Forecast', data: currentForecast.predicted,
-                        borderColor: '#667eea', backgroundColor: 'rgba(102, 126, 234, 0.1)',
-                        fill: false, tension: 0.4, pointRadius: 4, pointHoverRadius: 6
-                    }, {
-                        label: `Upper Bound (${confidenceLevel}%)`, data: currentForecast.upper,
-                        borderColor: 'rgba(255, 107, 107, 0.5)', backgroundColor: 'rgba(255, 107, 107, 0.1)',
-                        fill: '+1', tension: 0.4, pointRadius: 0
-                    }, {
-                        label: `Lower Bound (${confidenceLevel}%)`, data: currentForecast.lower,
-                        borderColor: 'rgba(255, 107, 107, 0.5)', backgroundColor: 'rgba(255, 107, 107, 0.1)',
-                        fill: false, tension: 0.4, pointRadius: 0
-                    }, {
-                        label: 'Trend Component', data: currentForecast.trend,
-                        borderColor: '#4ECDC4', backgroundColor: 'rgba(78, 205, 196, 0.1)',
-                        fill: false, tension: 0.4, borderDash: [5, 5], pointRadius: 2
-                    }]
-                }, options: {
-                    responsive: true, interaction: { intersect: false, mode: 'index' },
-                    scales: {
-                        y: { beginAtZero: true, title: { display: true, text: 'Demand (Orders)' } },
-                        x: { title: { display: true, text: `Forecasting ${forecastWeeks} Week${forecastWeeks > 1 ? 's' : ''} Ahead` } }
-                    },
-                    plugins: {
-                        title: { display: true, text: `Prophet Forecast: Weeks ${lastTrainWeek + 1} to ${lastTrainWeek + forecastWeeks} (${confidenceLevel}% CI)` },
-                        legend: { display: true, position: 'top' }
+            try {
+                forecastChart = new Chart(chartContext, {
+                    type: 'line', 
+                    data: {
+                        labels: labels, 
+                        datasets: [{
+                            label: `Meal ${mealId} Forecast`, 
+                            data: currentForecast.predicted,
+                            borderColor: '#667eea', 
+                            backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                            fill: false, 
+                            tension: 0.4, 
+                            pointRadius: 4, 
+                            pointHoverRadius: 6
+                        }, {
+                            label: `Upper Bound (${confidenceLevel}%)`, 
+                            data: currentForecast.upper,
+                            borderColor: 'rgba(255, 107, 107, 0.5)', 
+                            backgroundColor: 'rgba(255, 107, 107, 0.1)',
+                            fill: '+1', 
+                            tension: 0.4, 
+                            pointRadius: 0
+                        }, {
+                            label: `Lower Bound (${confidenceLevel}%)`, 
+                            data: currentForecast.lower,
+                            borderColor: 'rgba(255, 107, 107, 0.5)', 
+                            backgroundColor: 'rgba(255, 107, 107, 0.1)',
+                            fill: false, 
+                            tension: 0.4, 
+                            pointRadius: 0
+                        }, {
+                            label: 'Trend Component', 
+                            data: currentForecast.trend,
+                            borderColor: '#4ECDC4', 
+                            backgroundColor: 'rgba(78, 205, 196, 0.1)',
+                            fill: false, 
+                            tension: 0.4, 
+                            borderDash: [5, 5], 
+                            pointRadius: 2
+                        }]
+                    }, 
+                    options: {
+                        responsive: true, 
+                        maintainAspectRatio: false,
+                        interaction: { intersect: false, mode: 'index' },
+                        scales: {
+                            y: { 
+                                beginAtZero: true, 
+                                title: { display: true, text: 'Meal Orders' } 
+                            },
+                            x: { 
+                                title: { 
+                                    display: true, 
+                                    text: `Forecasting ${forecastWeeks} Week${forecastWeeks > 1 ? 's' : ''} Ahead` 
+                                } 
+                            }
+                        },
+                        plugins: {
+                            title: { 
+                                display: true, 
+                                text: `Meal ${mealId} Forecast: Weeks ${lastTrainWeek + 1} to ${lastTrainWeek + forecastWeeks} (${confidenceLevel}% CI)` 
+                            },
+                            legend: { display: true, position: 'top' }
+                        }
                     }
-                }
-            });
+                });
+                
+                debugLog('Forecast chart created successfully');
+                
+            } catch (error) {
+                debugLog('Error creating forecast chart', error);
+                throw error;
+            }
         }
 
         function updatePerformanceChart() {
-            const ctx = document.getElementById('performanceChart').getContext('2d');
-            if (performanceChart) performanceChart.destroy();
+            debugLog('Updating performance chart');
+            
+            const ctx = document.getElementById('performanceChart');
+            if (!ctx) {
+                debugLog('Performance chart canvas not found');
+                return;
+            }
+            
+            const chartContext = ctx.getContext('2d');
+            if (performanceChart) {
+                performanceChart.destroy();
+                performanceChart = null;
+            }
 
-            if (!currentMetrics) return;
+            if (!currentMetrics) {
+                debugLog('No metrics available for performance chart');
+                return;
+            }
 
             const forecastWeeks = currentForecast.weeks.length;
             
-            // Show forecast-specific metrics instead of just training metrics
             const forecastMetrics = [
                 'Model Training Accuracy',
                 'Forecast Confidence', 
@@ -624,195 +759,257 @@
             const forecastValues = [
                 currentMetrics.accuracy || 0,
                 parseInt(document.getElementById('confidence').value),
-                Math.min(100, (currentMetrics.test_samples || 0) * 3), // Scale data coverage
-                Math.max(0, 100 - (currentMetrics.mape || 0)) // Trend strength based on MAPE
+                Math.min(100, (currentMetrics.test_samples || 0) * 3),
+                Math.max(0, 100 - (currentMetrics.mape || 0))
             ];
 
-            performanceChart = new Chart(ctx, {
-                type: 'radar', data: {
-                    labels: forecastMetrics, datasets: [{
-                        label: `${forecastWeeks} Week Forecast Quality`,
-                        data: forecastValues,
-                        borderColor: '#667eea', backgroundColor: 'rgba(102, 126, 234, 0.2)',
-                        pointBackgroundColor: '#667eea', pointBorderColor: '#fff',
-                        pointHoverBackgroundColor: '#fff', pointHoverBorderColor: '#667eea'
-                    }]
-                }, options: {
-                    responsive: true,
-                    scales: { r: { beginAtZero: true, max: 100, title: { display: true, text: 'Quality Score (%)' } } },
-                    plugins: {
-                        title: { display: true, text: `Forecast Quality Assessment` },
-                        legend: { display: true, position: 'top' }
-                    }
-                }
-            });
-        }
-
-        // Use real training performance data instead of fake data
-        function updateAccuracyChart() {
-            const ctx = document.getElementById('accuracyChart').getContext('2d');
-            if (accuracyChart) accuracyChart.destroy();
-
-            // Use real training performance data if available
-            if (currentTrainingPerformance) {
-                console.log('Using real training performance data:', currentTrainingPerformance);
-                
-                const labels = currentTrainingPerformance.weeks;
-                const actualData = currentTrainingPerformance.actual;
-                const predictedData = currentTrainingPerformance.predicted;
-                
-                // Update the chart title with actual week range information
-                const titleElement = document.getElementById('trainingPerformanceTitle');
-                if (currentTrainingPerformance.week_range && currentTrainingPerformance.total_weeks_available) {
-                    titleElement.textContent = `🎯 Training Performance: Last ${labels.length} weeks (${currentTrainingPerformance.week_range}, Total: ${currentTrainingPerformance.total_weeks_available} weeks)`;
-                }
-
-                accuracyChart = new Chart(ctx, {
-                    type: 'line', 
+            try {
+                performanceChart = new Chart(chartContext, {
+                    type: 'radar', 
                     data: {
-                        labels: labels, 
+                        labels: forecastMetrics, 
                         datasets: [{
-                            label: 'Actual Training Data', 
-                            data: actualData,
-                            borderColor: '#4ECDC4', 
-                            backgroundColor: 'rgba(78, 205, 196, 0.1)',
-                            fill: false, 
-                            tension: 0.4,
-                            pointRadius: 4
-                        }, {
-                            label: 'Prophet Predictions (Training)', 
-                            data: predictedData,
+                            label: `${forecastWeeks} Week Forecast Quality`,
+                            data: forecastValues,
                             borderColor: '#667eea', 
-                            backgroundColor: 'rgba(102, 126, 234, 0.1)',
-                            fill: false, 
-                            tension: 0.4,
-                            pointRadius: 4,
-                            borderDash: [5, 5]
+                            backgroundColor: 'rgba(102, 126, 234, 0.2)',
+                            pointBackgroundColor: '#667eea', 
+                            pointBorderColor: '#fff',
+                            pointHoverBackgroundColor: '#fff', 
+                            pointHoverBorderColor: '#667eea'
                         }]
                     }, 
                     options: {
                         responsive: true,
-                        interaction: { intersect: false, mode: 'index' },
+                        maintainAspectRatio: false,
                         scales: { 
-                            y: { beginAtZero: true, title: { display: true, text: 'Orders' } },
-                            x: { 
-                                title: { 
-                                    display: true, 
-                                    text: `Evaluation Period (${currentTrainingPerformance.week_range || 'Recent Weeks'})` 
-                                } 
-                            }
+                            r: { 
+                                beginAtZero: true, 
+                                max: 100, 
+                                title: { display: true, text: 'Quality Score (%)' } 
+                            } 
                         },
                         plugins: {
-                            title: { 
-                                display: true, 
-                                text: `Training Performance: Prophet vs Actual Data (${labels.length} weeks shown)` 
-                            },
+                            title: { display: true, text: `Forecast Quality Assessment` },
                             legend: { display: true, position: 'top' }
                         }
                     }
                 });
                 
-            } else {
-                // Fallback: Show message that training performance data is not available
-                console.log('No training performance data available, showing placeholder');
+                debugLog('Performance chart created successfully');
                 
-                accuracyChart = new Chart(ctx, {
-                    type: 'bar', 
-                    data: {
-                        labels: ['Training Performance'], 
-                        datasets: [{
-                            label: 'Training data not available for visualization', 
-                            data: [0],
-                            backgroundColor: 'rgba(200, 200, 200, 0.5)'
-                        }]
-                    }, 
-                    options: {
-                        responsive: true,
-                        plugins: {
-                            title: { 
-                                display: true, 
-                                text: 'Training Performance Data Not Available' 
+            } catch (error) {
+                debugLog('Error creating performance chart', error);
+                throw error;
+            }
+        }
+
+        function updateAccuracyChart() {
+            debugLog('Updating accuracy chart');
+            
+            const ctx = document.getElementById('accuracyChart');
+            if (!ctx) {
+                debugLog('Accuracy chart canvas not found');
+                return;
+            }
+            
+            const chartContext = ctx.getContext('2d');
+            if (accuracyChart) {
+                accuracyChart.destroy();
+                accuracyChart = null;
+            }
+
+            if (currentTrainingPerformance) {
+                debugLog('Using real training performance data:', currentTrainingPerformance);
+                
+                const labels = currentTrainingPerformance.weeks;
+                const actualData = currentTrainingPerformance.actual;
+                const predictedData = currentTrainingPerformance.predicted;
+                const mealId = currentForecast?.meal_id || currentMetrics?.meal_id || 'Unknown';
+                const regionId = currentMetrics?.region_id;
+                
+                const titleElement = document.getElementById('trainingPerformanceTitle');
+                if (currentTrainingPerformance.week_range && currentTrainingPerformance.total_weeks_available) {
+                    const regionText = regionId ? ` (${regionId})` : ' (All Regions)';
+                    titleElement.textContent = `🎯 Meal ${mealId} Training Performance${regionText}: Last ${labels.length} weeks (${currentTrainingPerformance.week_range}, Total: ${currentTrainingPerformance.total_weeks_available} weeks)`;
+                }
+
+                try {
+                    accuracyChart = new Chart(chartContext, {
+                        type: 'line', 
+                        data: {
+                            labels: labels, 
+                            datasets: [{
+                                label: `Actual Meal ${mealId} Orders`, 
+                                data: actualData,
+                                borderColor: '#4ECDC4', 
+                                backgroundColor: 'rgba(78, 205, 196, 0.1)',
+                                fill: false, 
+                                tension: 0.4,
+                                pointRadius: 4
+                            }, {
+                                label: `Prophet Predictions for Meal ${mealId}`, 
+                                data: predictedData,
+                                borderColor: '#667eea', 
+                                backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                                fill: false, 
+                                tension: 0.4,
+                                pointRadius: 4,
+                                borderDash: [5, 5]
+                            }]
+                        }, 
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            interaction: { intersect: false, mode: 'index' },
+                            scales: { 
+                                y: { 
+                                    beginAtZero: true, 
+                                    title: { display: true, text: `Meal ${mealId} Orders` } 
+                                },
+                                x: { 
+                                    title: { 
+                                        display: true, 
+                                        text: `Training Validation Period (${currentTrainingPerformance.week_range || 'Recent Weeks'})` 
+                                    } 
+                                }
+                            },
+                            plugins: {
+                                title: { 
+                                    display: true, 
+                                    text: `Meal ${mealId} Training Performance: How Well Prophet Learned This Meal's Patterns` 
+                                },
+                                legend: { display: true, position: 'top' }
                             }
                         }
-                    }
-                });
+                    });
+                    
+                    debugLog('Accuracy chart created successfully with real data');
+                    
+                } catch (error) {
+                    debugLog('Error creating accuracy chart with real data', error);
+                    throw error;
+                }
+                
+            } else {
+                debugLog('No training performance data available, showing placeholder');
+                
+                try {
+                    accuracyChart = new Chart(chartContext, {
+                        type: 'bar', 
+                        data: {
+                            labels: ['Training Performance'], 
+                            datasets: [{
+                                label: 'Training data not available for visualization', 
+                                data: [0],
+                                backgroundColor: 'rgba(200, 200, 200, 0.5)'
+                            }]
+                        }, 
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                title: { 
+                                    display: true, 
+                                    text: 'Training Performance Data Not Available' 
+                                }
+                            }
+                        }
+                    });
+                    
+                    debugLog('Placeholder accuracy chart created');
+                    
+                } catch (error) {
+                    debugLog('Error creating placeholder accuracy chart', error);
+                    throw error;
+                }
             }
         }
 
         function showInsights() {
             const insights = [];
+            const mealId = currentForecast?.meal_id || 'Unknown';
             
             if (currentMetrics) {
                 if (currentMetrics.accuracy > 90) {
-                    insights.push("🎯 Excellent model performance - Prophet is highly accurate for this regional data");
+                    insights.push(`🎯 Excellent performance for Meal ${mealId} - Prophet is highly accurate (${currentMetrics.accuracy.toFixed(1)}%)`);
                 } else if (currentMetrics.accuracy > 80) {
-                    insights.push("✅ Good model performance - Prophet provides reliable regional forecasts");
+                    insights.push(`✅ Good performance for Meal ${mealId} - Prophet provides reliable forecasts (${currentMetrics.accuracy.toFixed(1)}%)`);
                 } else if (currentMetrics.accuracy > 70) {
-                    insights.push("⚠️ Moderate performance - consider regional feature engineering or parameter tuning");
+                    insights.push(`⚠️ Moderate performance for Meal ${mealId} - consider price adjustments or longer training (${currentMetrics.accuracy.toFixed(1)}%)`);
                 } else {
-                    insights.push("❌ Lower accuracy - regional data may need preprocessing or different modeling approach");
+                    insights.push(`❌ Lower accuracy for Meal ${mealId} - may need different approach (${currentMetrics.accuracy.toFixed(1)}%)`);
                 }
                 
                 if (currentMetrics.r2 > 0.8) {
-                    insights.push("📊 Strong correlation between predictions and actual regional values");
+                    insights.push(`📊 Strong price-demand correlation for Meal ${mealId} (R² = ${currentMetrics.r2.toFixed(3)})`);
                 } else if (currentMetrics.r2 > 0.6) {
-                    insights.push("📈 Moderate predictive power - model captures main regional patterns");
+                    insights.push(`📈 Moderate price sensitivity for Meal ${mealId} - checkout_price regressor working`);
                 } else {
-                    insights.push("📉 Weak correlation - consider adding more regional features or longer training period");
+                    insights.push(`📉 Weak price correlation for Meal ${mealId} - demand may be driven by other factors`);
                 }
                 
                 if (Math.abs(currentMetrics.bias) < 50) {
-                    insights.push("⚖️ Well-calibrated regional model with minimal bias");
+                    insights.push(`⚖️ Well-calibrated model for Meal ${mealId} with minimal bias`);
                 } else if (currentMetrics.bias > 50) {
-                    insights.push("📈 Model tends to over-predict - adjust for conservative regional planning");
+                    insights.push(`📈 Model over-predicts Meal ${mealId} demand - adjust for conservative ordering`);
                 } else {
-                    insights.push("📉 Model tends to under-predict - consider regional safety stock buffers");
+                    insights.push(`📉 Model under-predicts Meal ${mealId} demand - consider safety stock buffers`);
+                }
+                
+                if (currentMetrics.total_weeks_used) {
+                    insights.push(`📊 Model trained on ${currentMetrics.total_weeks_used} weeks of Meal ${mealId} data`);
+                }
+                
+                if (currentMetrics.regressors_used > 0) {
+                    insights.push(`💰 Using checkout_price regressor - price changes will impact forecasts`);
                 }
             }
             
             if (currentForecast) {
                 const avgForecast = currentForecast.predicted.reduce((a, b) => a + b, 0) / currentForecast.predicted.length;
                 const totalForecast = currentForecast.predicted.reduce((a, b) => a + b, 0);
-                insights.push(`📦 Expected weekly regional demand: ${Math.round(avgForecast).toLocaleString()} orders`);
-                insights.push(`🎯 Total ${currentForecast.weeks.length}-week regional forecast: ${totalForecast.toLocaleString()} orders`);
+                insights.push(`📦 Expected weekly demand for Meal ${mealId}: ${Math.round(avgForecast).toLocaleString()} orders`);
+                insights.push(`🎯 Total ${currentForecast.weeks.length}-week forecast for Meal ${mealId}: ${totalForecast.toLocaleString()} orders`);
             }
             
-            // Add insights about training performance if available
             if (currentTrainingPerformance) {
-                insights.push("📊 Training performance visualization shows actual vs predicted comparison on historical data");
+                insights.push(`📊 Training performance chart shows actual vs predicted for validation period`);
                 const trainingAccuracy = currentMetrics ? currentMetrics.accuracy : null;
                 if (trainingAccuracy && trainingAccuracy > 85) {
-                    insights.push("✅ Strong training performance indicates reliable future forecasts");
+                    insights.push(`✅ Strong training performance indicates reliable ingredient ordering forecasts`);
                 }
             }
             
-            insights.push("🗺️ Use regional Prophet forecasts for distributed inventory planning and capacity management");
-            insights.push("📅 Regional seasonality patterns help optimize center-specific marketing campaigns");
-            insights.push("🔄 Retrain regional models weekly with new data for optimal performance");
+            insights.push(`🍽️ Use Meal ${mealId} forecasts for ingredient procurement and supply chain planning`);
+            insights.push(`📅 Meal-specific seasonality patterns help optimize kitchen preparation schedules`);
+            insights.push(`🔄 Retrain meal models weekly with new sales data for optimal accuracy`);
             
             if (currentMetrics && currentMetrics.accuracy > 85) {
-                insights.push("💰 High regional accuracy enables just-in-time inventory strategies");
-                insights.push("📈 Consider Prophet for regional financial planning and resource allocation");
+                insights.push(`💰 High accuracy enables just-in-time ingredient ordering for Meal ${mealId}`);
+                insights.push(`📈 Consider using forecasts for Meal ${mealId} pricing optimization`);
             }
             
-            insights.push("🔄 Compare regional models to identify high/low performing areas");
-            insights.push("🎯 Use regional forecasts to optimize delivery routes and logistics");
-            insights.push("📊 Regional demand patterns inform center expansion strategies");
+            insights.push(`🎯 Meal-specific forecasts enable precise inventory management`);
+            insights.push(`📊 Compare different meal forecasts to optimize kitchen resource allocation`);
             
             if (currentMetrics) {
                 if (currentMetrics.mape < 10) {
-                    insights.push("🎯 Very low regional prediction error - suitable for automated ordering systems");
+                    insights.push(`🎯 Very low prediction error for Meal ${mealId} - suitable for automated ordering systems`);
                 } else if (currentMetrics.mape < 20) {
-                    insights.push("✅ Acceptable regional prediction error for most business applications");
+                    insights.push(`✅ Acceptable prediction error for Meal ${mealId} for most business applications`);
                 } else {
-                    insights.push("⚠️ High regional prediction error - implement manual review processes");
+                    insights.push(`⚠️ High prediction error for Meal ${mealId} - implement manual review processes`);
                 }
             }
 
             document.getElementById('insightsList').innerHTML = insights.map(insight => `<li>${insight}</li>`).join('');
         }
 
-        function showLoading(show) { document.getElementById('loadingSection').style.display = show ? 'block' : 'none'; }
+        function showLoading(show) { 
+            document.getElementById('loadingSection').style.display = show ? 'block' : 'none'; 
+        }
+        
         function disableButtons(disable) {
             document.getElementById('trainBtn').disabled = disable;
             if (disable) document.getElementById('forecastBtn').disabled = true;
@@ -836,7 +1033,35 @@
             }, 5000);
         }
 
-        setInterval(loadSystemStatus, 30000);
+        // Auto-refresh system status periodically
+        setInterval(() => {
+            if (!debugMode) {  // Only auto-refresh if not in debug mode
+                loadSystemStatus();
+            }
+        }, 30000);
+
+        // Chart.js error handling
+        Chart.defaults.plugins.legend.display = true;
+        Chart.defaults.responsive = true;
+        Chart.defaults.maintainAspectRatio = false;
+
+        // Add global error handler for uncaught errors
+        window.addEventListener('error', function(event) {
+            debugLog('Global error caught', {
+                message: event.message,
+                filename: event.filename,
+                line: event.lineno,
+                column: event.colno,
+                error: event.error
+            });
+            showError('Unexpected error occurred', event.message);
+        });
+
+        // Add unhandled promise rejection handler
+        window.addEventListener('unhandledrejection', function(event) {
+            debugLog('Unhandled promise rejection', event.reason);
+            showError('Promise rejection', event.reason.toString());
+        });
     </script>
 </body>
 </html>
