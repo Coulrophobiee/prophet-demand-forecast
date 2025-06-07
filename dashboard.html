@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prophet Food Demand Forecasting</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh; padding: 20px;
+        }
+        .container {
+            max-width: 1400px; margin: 0 auto;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px; padding: 30px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            backdrop-filter: blur(10px);
+        }
+        .header {
+            text-align: center; margin-bottom: 40px;
+            background: linear-gradient(45deg, #FF6B6B, #4ECDC4);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
+        .header h1 { font-size: 3rem; font-weight: 700; margin-bottom: 10px; }
+        .header p { font-size: 1.2rem; color: #666; margin-bottom: 30px; }
+        .status {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white; padding: 20px; border-radius: 15px; margin-bottom: 30px;
+        }
+        .controls {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px; margin-bottom: 30px; padding: 20px;
+            background: rgba(255, 255, 255, 0.7); border-radius: 15px;
+        }
+        .control-group { display: flex; flex-direction: column; }
+        .control-group label { font-weight: 600; margin-bottom: 8px; color: #333; }
+        .control-group input, .control-group select {
+            padding: 12px; border: 2px solid #e0e0e0; border-radius: 10px;
+            font-size: 14px; transition: all 0.3s ease;
+        }
+        .control-group input:focus, .control-group select:focus {
+            outline: none; border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        .btn {
+            padding: 12px 30px; background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white; border: none; border-radius: 10px; font-size: 16px;
+            font-weight: 600; cursor: pointer; transition: all 0.3s ease;
+            text-transform: uppercase; letter-spacing: 1px;
+        }
+        .btn:hover { transform: translateY(-2px); box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3); }
+        .btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+        .metrics {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px; margin-bottom: 30px;
+        }
+        .metric-card {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white; padding: 25px; border-radius: 15px; text-align: center;
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3); transition: transform 0.3s ease;
+        }
+        .metric-card:hover { transform: translateY(-5px); }
+        .metric-card h3 { font-size: 2.5rem; margin-bottom: 10px; font-weight: 700; }
+        .metric-card p { font-size: 1.1rem; opacity: 0.9; }
+        .charts {
+            display: grid; grid-template-columns: 1fr 1fr;
+            gap: 30px; margin-bottom: 30px;
+        }
+        .chart-container {
+            background: white; padding: 25px; border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+        }
+        .chart-container h3 {
+            text-align: center; margin-bottom: 20px;
+            color: #333; font-size: 1.3rem;
+        }
+        .full-width { grid-column: 1 / -1; }
+        .performance-section {
+            background: white; padding: 25px; border-radius: 15px;
+            margin-bottom: 30px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+        }
+        .performance-grid {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px; margin-top: 20px;
+        }
+        .performance-item {
+            text-align: center; padding: 15px;
+            background: #f8f9fa; border-radius: 10px;
+        }
+        .performance-item .value { font-size: 1.5rem; font-weight: bold; color: #667eea; }
+        .performance-item .label { font-size: 0.9rem; color: #666; margin-top: 5px; }
+        .insights {
+            background: linear-gradient(135deg, #FF6B6B, #4ECDC4);
+            color: white; padding: 25px; border-radius: 15px; margin-top: 30px;
+        }
+        .insights h3 { margin-bottom: 15px; font-size: 1.5rem; }
+        .insights ul { list-style: none; padding-left: 0; }
+        .insights li {
+            margin-bottom: 10px; padding-left: 20px; position: relative;
+        }
+        .insights li:before {
+            content: "✓"; position: absolute; left: 0; font-weight: bold;
+        }
+        .loading { display: none; text-align: center; padding: 20px; }
+        .spinner {
+            border: 4px solid #f3f3f3; border-top: 4px solid #667eea;
+            border-radius: 50%; width: 40px; height: 40px;
+            animation: spin 2s linear infinite; margin: 0 auto 10px;
+        }
+        .data-availability {
+            background: white; padding: 20px; border-radius: 15px; 
+            margin-bottom: 30px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+        }
+        .viable-option, .insufficient-option {
+            transition: all 0.3s ease;
+        }
+        .viable-option:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(59, 130, 246, 0.3);
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        @media (max-width: 768px) {
+            .charts { grid-template-columns: 1fr; }
+            .header h1 { font-size: 2rem; }
+            .controls { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🧠 Prophet Food Demand Forecasting</h1>
+            <p>Regional Analysis with Facebook Prophet Model</p>
+        </div>
+
+        <div class="status" id="statusSection">
+            <h3>📊 System Status</h3>
+            <p id="statusMessage">Loading data and initializing Prophet models...</p>
+        </div>
+
+        <div class="controls">
+            <div class="control-group">
+                <label for="regionSelect">Region:</label>
+                <select id="regionSelect"><option value="">All Regions</option></select>
+                <small id="regionInfo" style="color: #666; font-size: 0.8rem; margin-top: 4px;"></small>
+            </div>
+            <div class="control-group">
+                <label for="mealSelect">Meal Category:</label>
+                <select id="mealSelect"><option value="">All Meals</option></select>
+                <small id="mealInfo" style="color: #666; font-size: 0.8rem; margin-top: 4px;"></small>
+            </div>
+            <div class="control-group">
+                <label for="forecastWeeks">Forecast Weeks:</label>
+                <input type="number" id="forecastWeeks" value="10" min="1" max="52">
+            </div>
+            <div class="control-group">
+                <label for="confidence">Confidence Level (%):</label>
+                <input type="number" id="confidence" value="95" min="50" max="99" step="1" placeholder="e.g. 95">
+            </div>
+            <div class="control-group">
+                <button class="btn" onclick="trainModel()" id="trainBtn">Train Prophet Model</button>
+            </div>
+            <div class="control-group">
+                <button class="btn" onclick="generateForecast()" id="forecastBtn" disabled>Generate Forecast</button>
+            </div>
+        </div>
+
+        <div class="data-availability" id="dataAvailabilitySection" style="display: none;">
+            <h3>📊 Data Availability Analysis</h3>
+            <div id="availabilityContent"></div>
+        </div>
+
+        <div class="loading" id="loadingSection">
+            <div class="spinner"></div>
+            <p>Training Prophet model and evaluating performance...</p>
+        </div>
+
+        <div class="performance-section" id="performanceSection" style="display: none;">
+            <h3>🎯 Model Performance Evaluation</h3>
+            <p>Performance metrics using train data split evaluation:</p>
+            <div class="performance-grid" id="performanceGrid"></div>
+        </div>
+
+        <div class="metrics" id="metricsContainer" style="display: none;">
+            <div class="metric-card">
+                <h3 id="modelAccuracy">-</h3>
+                <p>Model Accuracy</p>
+            </div>
+            <div class="metric-card">
+                <h3 id="avgDemand">-</h3>
+                <p>Avg Predicted Demand</p>
+            </div>
+            <div class="metric-card">
+                <h3 id="totalForecast">-</h3>
+                <p>Total Forecast</p>
+            </div>
+            <div class="metric-card">
+                <h3 id="confidenceLevel">95%</h3>
+                <p>Confidence Level</p>
+            </div>
+        </div>
+
+        <div class="charts">
+            <div class="chart-container full-width">
+                <h3>📈 Prophet Regional Demand Forecast</h3>
+                <canvas id="forecastChart"></canvas>
+            </div>
+            <div class="chart-container">
+                <h3>📊 Model Performance Radar</h3>
+                <canvas id="performanceChart"></canvas>
+            </div>
+            <div class="chart-container">
+                <h3 id="trainingPerformanceTitle">🎯 Training Performance (Actual vs Predicted)</h3>
+                <canvas id="accuracyChart"></canvas>
+            </div>
+        </div>
+
+        <div class="insights" id="insights" style="display: none;">
+            <h3>🧠 Prophet Model Insights & Regional Recommendations</h3>
+            <ul id="insightsList"></ul>
+        </div>
+    </div>
+
+    <script>
+        let currentModel = null, currentForecast = null, currentMetrics = null;
+        let currentTrainingPerformance = null;
+        let dataAvailability = null;
+        let forecastChart = null, performanceChart = null, accuracyChart = null;
+
+        document.addEventListener('DOMContentLoaded', function() {
+            loadSystemStatus();
+            // Add event listeners for dropdown changes
+            document.getElementById('regionSelect').addEventListener('change', updateSelectionInfo);
+            document.getElementById('mealSelect').addEventListener('change', updateSelectionInfo);
+        });
+
+        async function loadSystemStatus() {
+            try {
+                const response = await fetch('/api/summary');
+                const data = await response.json();
+                updateStatusSection(data);
+                populateSelectors(data);
+                
+                // Load data availability
+                await loadDataAvailability();
+            } catch (error) {
+                document.getElementById('statusMessage').textContent = 
+                    '❌ Error: Could not load data. Make sure train.csv and test.csv are in the same directory.';
+            }
+        }
+
+        // Load data availability information
+        async function loadDataAvailability() {
+            try {
+                const response = await fetch('/api/data_availability');
+                const data = await response.json();
+                
+                if (data.success) {
+                    dataAvailability = data.availability;
+                    displayDataAvailability();
+                    updateSelectionInfo(); // Update info when page loads
+                } else {
+                    console.warn('Could not load data availability');
+                }
+            } catch (error) {
+                console.error('Error loading data availability:', error);
+            }
+        }
+
+        // Display data availability information
+        function displayDataAvailability() {
+            if (!dataAvailability) return;
+            
+            const section = document.getElementById('dataAvailabilitySection');
+            const content = document.getElementById('availabilityContent');
+            
+            let html = '<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 15px; margin-top: 15px;">';
+            
+            // Show viable options
+            const viableOptions = Object.entries(dataAvailability)
+                .filter(([key, info]) => info.sufficient)
+                .sort((a, b) => b[1].avg_demand - a[1].avg_demand) // Sort by demand
+                .slice(0, 8); // Show top 8
+            
+            viableOptions.forEach(([key, info]) => {
+                const statusIcon = info.sufficient ? '✅' : '❌';
+                const cardClass = info.sufficient ? 'viable-option' : 'insufficient-option';
+                
+                html += `
+                    <div class="${cardClass}" style="background: ${info.sufficient ? '#f0f9ff' : '#fef2f2'}; border: 2px solid ${info.sufficient ? '#3b82f6' : '#ef4444'}; border-radius: 10px; padding: 15px; cursor: ${info.sufficient ? 'pointer' : 'default'};" onclick="${info.sufficient ? `selectOption('${key}')` : ''}">
+                        <div style="font-weight: bold; color: #333; margin-bottom: 8px;">
+                            ${statusIcon} ${info.description}
+                        </div>
+                        <div style="font-size: 0.9rem; color: #666;">
+                            <div>📅 Weeks: ${info.weeks}</div>
+                            <div>📊 Avg Demand: ${Math.round(info.avg_demand).toLocaleString()}</div>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            html += '</div>';
+            
+            // Add insufficient data warning if needed
+            const insufficientOptions = Object.entries(dataAvailability)
+                .filter(([key, info]) => !info.sufficient).length;
+            
+            if (insufficientOptions > 0) {
+                html += `<div style="margin-top: 15px; padding: 10px; background: #fef2f2; border-radius: 8px; border-left: 4px solid #ef4444;">
+                    <strong>⚠️ Note:</strong> ${insufficientOptions} combinations have insufficient data (&lt;30 weeks) for reliable Prophet forecasting.
+                </div>`;
+            }
+            
+            content.innerHTML = html;
+            section.style.display = 'block';
+        }
+
+        // Quick selection of viable options
+        function selectOption(key) {
+            const parts = key.split('_');
+            
+            if (key === 'overall') {
+                document.getElementById('regionSelect').value = '';
+                document.getElementById('mealSelect').value = '';
+            } else if (parts[1] === 'all') {
+                // Region selected, all meals
+                document.getElementById('regionSelect').value = parts[0];
+                document.getElementById('mealSelect').value = '';
+            } else if (parts[0] === 'all') {
+                // All regions, specific meal
+                document.getElementById('regionSelect').value = '';
+                document.getElementById('mealSelect').value = parts[1];
+            } else {
+                // Specific region and meal
+                document.getElementById('regionSelect').value = parts[0];
+                document.getElementById('mealSelect').value = parts[1];
+            }
+            
+            updateSelectionInfo();
+            showStatusMessage(`✅ Selected: ${dataAvailability[key].description}`, 'success');
+        }
+
+        // Update selection info when user changes dropdowns
+        function updateSelectionInfo() {
+            if (!dataAvailability) return;
+            
+            const region = document.getElementById('regionSelect').value;
+            const meal = document.getElementById('mealSelect').value;
+            
+            // Determine the key for current selection
+            let currentKey;
+            if (region && meal) {
+                currentKey = `${region}_${meal}`;
+            } else if (region) {
+                currentKey = `${region}_all`;
+            } else if (meal) {
+                currentKey = `all_${meal}`;
+            } else {
+                currentKey = 'overall';
+            }
+            
+            // Update info displays
+            const regionInfo = document.getElementById('regionInfo');
+            const mealInfo = document.getElementById('mealInfo');
+            
+            if (dataAvailability[currentKey]) {
+                const info = dataAvailability[currentKey];
+                const status = info.sufficient ? '✅' : '❌';
+                const infoText = `${status} ${info.weeks} weeks, avg: ${Math.round(info.avg_demand).toLocaleString()}`;
+                
+                if (region) {
+                    regionInfo.textContent = infoText;
+                    regionInfo.style.color = info.sufficient ? '#059669' : '#dc2626';
+                } else {
+                    regionInfo.textContent = '';
+                }
+                
+                if (meal) {
+                    mealInfo.textContent = infoText;
+                    mealInfo.style.color = info.sufficient ? '#059669' : '#dc2626';
+                } else {
+                    mealInfo.textContent = '';
+                }
+                
+                // Update train button state
+                const trainBtn = document.getElementById('trainBtn');
+                if (info.sufficient) {
+                    trainBtn.style.opacity = '1';
+                    trainBtn.title = `Ready to train with ${info.weeks} weeks of data`;
+                } else {
+                    trainBtn.style.opacity = '0.7';
+                    trainBtn.title = `Insufficient data: only ${info.weeks} weeks (need 30+)`;
+                }
+            }
+        }
+
+        function updateStatusSection(data) {
+            const statusMsg = document.getElementById('statusMessage');
+            if (data.data_info.train_records > 0) {
+                statusMsg.innerHTML = `✅ Data loaded successfully<br>📊 Training data: ${data.data_info.train_records.toLocaleString()} records<br>🧪 Test data: ${data.data_info.test_records.toLocaleString()} records<br>🗺️ Regions: 4 | 🍽️ Meals: ${data.data_info.meals.length}<br>📅 Weeks: ${data.data_info.weeks_range[0]} - ${data.data_info.weeks_range[1]}`;
+            } else {
+                statusMsg.textContent = '❌ No data found. Please ensure train.csv and test.csv are in the same directory.';
+            }
+        }
+
+        function populateSelectors(data) {
+            const regionSelect = document.getElementById('regionSelect');
+            const mealSelect = document.getElementById('mealSelect');
+            regionSelect.innerHTML = '<option value="">All Regions</option>';
+            mealSelect.innerHTML = '<option value="">All Meals</option>';
+            
+            ['Region_1', 'Region_2', 'Region_3', 'Region_4'].forEach(region => {
+                const option = document.createElement('option');
+                option.value = region; option.textContent = region;
+                regionSelect.appendChild(option);
+            });
+            
+            data.data_info.meals.forEach(meal => {
+                const option = document.createElement('option');
+                option.value = meal; option.textContent = `Meal ${meal}`;
+                mealSelect.appendChild(option);
+            });
+        }
+
+        async function trainModel() {
+            const region = document.getElementById('regionSelect').value;
+            const meal = document.getElementById('mealSelect').value;
+            showLoading(true); disableButtons(true);
+            
+            try {
+                let url = '/api/train';
+                const params = new URLSearchParams();
+                if (region) params.append('region', region);
+                if (meal) params.append('meal', meal);
+                if (params.toString()) url += '?' + params.toString();
+                
+                const response = await fetch(url);
+                const data = await response.json();
+                console.log('Training response:', data);
+                
+                if (data.success && data.metrics) {
+                    currentModel = data.model_key || `${region || 'all'}_${meal || 'all'}`;
+                    if (currentModel === 'all_all') currentModel = 'overall';
+                    currentMetrics = data.metrics;
+                    
+                    // Load training performance data
+                    await loadTrainingPerformance(currentModel);
+                    
+                    showPerformanceSection(data.metrics);
+                    document.getElementById('forecastBtn').disabled = false;
+                    showStatusMessage('✅ Prophet model trained and evaluated successfully!', 'success');
+                } else if (data.success) {
+                    currentModel = data.model_key || `${region || 'all'}_${meal || 'all'}`;
+                    if (currentModel === 'all_all') currentModel = 'overall';
+                    
+                    // Load training performance data
+                    await loadTrainingPerformance(currentModel);
+                    
+                    document.getElementById('forecastBtn').disabled = false;
+                    showStatusMessage('✅ Prophet model trained successfully! (Evaluation data unavailable)', 'success');
+                } else {
+                    showStatusMessage('❌ ' + (data.message || 'Training failed'), 'error');
+                }
+            } catch (error) {
+                console.error('Training error:', error);
+                showStatusMessage('❌ Error training model: ' + error.message, 'error');
+            }
+            showLoading(false); disableButtons(false);
+        }
+
+        // Load training performance data
+        async function loadTrainingPerformance(modelKey) {
+            try {
+                const response = await fetch(`/api/training_performance?model=${encodeURIComponent(modelKey)}`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    currentTrainingPerformance = data.performance;
+                    console.log('Training performance loaded:', currentTrainingPerformance);
+                } else {
+                    console.warn('No training performance data available:', data.message);
+                    currentTrainingPerformance = null;
+                }
+            } catch (error) {
+                console.error('Error loading training performance:', error);
+                currentTrainingPerformance = null;
+            }
+        }
+
+        async function generateForecast() {
+            if (!currentModel) { alert('Please train a model first!'); return; }
+            const weeks = document.getElementById('forecastWeeks').value;
+            const confidence = document.getElementById('confidence').value;
+            showLoading(true);
+            
+            try {
+                const response = await fetch(`/api/forecast?model=${encodeURIComponent(currentModel)}&weeks=${weeks}&confidence=${confidence}`);
+                const data = await response.json();
+                console.log('Forecast response:', data);
+                
+                if (data.success) {
+                    currentForecast = data.forecast; updateDashboard();
+                    showStatusMessage(`✅ Forecast generated with ${confidence}% confidence intervals!`, 'success');
+                } else {
+                    showStatusMessage('❌ ' + (data.message || 'Forecast generation failed'), 'error');
+                }
+            } catch (error) {
+                console.error('Forecast error:', error);
+                showStatusMessage('❌ Error generating forecast: ' + error.message, 'error');
+            }
+            showLoading(false);
+        }
+
+        function showPerformanceSection(metrics) {
+            if (!metrics) return;
+            const section = document.getElementById('performanceSection');
+            const grid = document.getElementById('performanceGrid');
+            grid.innerHTML = '';
+            
+            const metricsConfig = [
+                { key: 'accuracy', label: 'Accuracy', format: val => val != null ? val.toFixed(1) + '%' : 'N/A' },
+                { key: 'mae', label: 'MAE', format: val => val != null ? val.toFixed(0) : 'N/A' },
+                { key: 'rmse', label: 'RMSE', format: val => val != null ? val.toFixed(0) : 'N/A' },
+                { key: 'r2', label: 'R² Score', format: val => val != null ? val.toFixed(3) : 'N/A' },
+                { key: 'mape', label: 'MAPE', format: val => val != null ? val.toFixed(1) + '%' : 'N/A' },
+                { key: 'bias', label: 'Bias', format: val => val != null ? val.toFixed(0) : 'N/A' }
+            ];
+            
+            metricsConfig.forEach(config => {
+                const item = document.createElement('div');
+                item.className = 'performance-item';
+                const value = metrics[config.key];
+                item.innerHTML = `<div class="value">${config.format(value)}</div><div class="label">${config.label}</div>`;
+                grid.appendChild(item);
+            });
+            section.style.display = 'block';
+        }
+
+        function updateDashboard() {
+            if (!currentForecast) return;
+            
+            if (currentMetrics && currentMetrics.accuracy != null) {
+                document.getElementById('modelAccuracy').textContent = currentMetrics.accuracy.toFixed(1) + '%';
+            } else {
+                document.getElementById('modelAccuracy').textContent = 'N/A';
+            }
+            
+            const avgDemand = Math.round(currentForecast.predicted.reduce((a, b) => a + b, 0) / currentForecast.predicted.length);
+            const totalForecast = currentForecast.predicted.reduce((a, b) => a + b, 0);
+            const confidenceLevel = document.getElementById('confidence').value;
+            
+            document.getElementById('avgDemand').textContent = avgDemand.toLocaleString();
+            document.getElementById('totalForecast').textContent = totalForecast.toLocaleString();
+            document.getElementById('confidenceLevel').textContent = confidenceLevel + '%';
+            document.getElementById('metricsContainer').style.display = 'grid';
+            
+            updateForecastChart(); updatePerformanceChart(); updateAccuracyChart();
+            showInsights(); document.getElementById('insights').style.display = 'block';
+        }
+
+        function updateForecastChart() {
+            const ctx = document.getElementById('forecastChart').getContext('2d');
+            if (forecastChart) forecastChart.destroy();
+
+            const confidenceLevel = document.getElementById('confidence').value;
+            const forecastWeeks = currentForecast.weeks.length;
+            
+            // Create meaningful labels with actual week numbers
+            const lastTrainWeek = 145; // Based on your data going to week 145
+            const labels = currentForecast.weeks.map(w => `Week ${lastTrainWeek + w}`);
+
+            forecastChart = new Chart(ctx, {
+                type: 'line', data: {
+                    labels: labels, datasets: [{
+                        label: 'Prophet Forecast', data: currentForecast.predicted,
+                        borderColor: '#667eea', backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                        fill: false, tension: 0.4, pointRadius: 4, pointHoverRadius: 6
+                    }, {
+                        label: `Upper Bound (${confidenceLevel}%)`, data: currentForecast.upper,
+                        borderColor: 'rgba(255, 107, 107, 0.5)', backgroundColor: 'rgba(255, 107, 107, 0.1)',
+                        fill: '+1', tension: 0.4, pointRadius: 0
+                    }, {
+                        label: `Lower Bound (${confidenceLevel}%)`, data: currentForecast.lower,
+                        borderColor: 'rgba(255, 107, 107, 0.5)', backgroundColor: 'rgba(255, 107, 107, 0.1)',
+                        fill: false, tension: 0.4, pointRadius: 0
+                    }, {
+                        label: 'Trend Component', data: currentForecast.trend,
+                        borderColor: '#4ECDC4', backgroundColor: 'rgba(78, 205, 196, 0.1)',
+                        fill: false, tension: 0.4, borderDash: [5, 5], pointRadius: 2
+                    }]
+                }, options: {
+                    responsive: true, interaction: { intersect: false, mode: 'index' },
+                    scales: {
+                        y: { beginAtZero: true, title: { display: true, text: 'Demand (Orders)' } },
+                        x: { title: { display: true, text: `Forecasting ${forecastWeeks} Week${forecastWeeks > 1 ? 's' : ''} Ahead` } }
+                    },
+                    plugins: {
+                        title: { display: true, text: `Prophet Forecast: Weeks ${lastTrainWeek + 1} to ${lastTrainWeek + forecastWeeks} (${confidenceLevel}% CI)` },
+                        legend: { display: true, position: 'top' }
+                    }
+                }
+            });
+        }
+
+        function updatePerformanceChart() {
+            const ctx = document.getElementById('performanceChart').getContext('2d');
+            if (performanceChart) performanceChart.destroy();
+
+            if (!currentMetrics) return;
+
+            const forecastWeeks = currentForecast.weeks.length;
+            
+            // Show forecast-specific metrics instead of just training metrics
+            const forecastMetrics = [
+                'Model Training Accuracy',
+                'Forecast Confidence', 
+                'Data Coverage',
+                'Trend Strength'
+            ];
+            
+            const forecastValues = [
+                currentMetrics.accuracy || 0,
+                parseInt(document.getElementById('confidence').value),
+                Math.min(100, (currentMetrics.test_samples || 0) * 3), // Scale data coverage
+                Math.max(0, 100 - (currentMetrics.mape || 0)) // Trend strength based on MAPE
+            ];
+
+            performanceChart = new Chart(ctx, {
+                type: 'radar', data: {
+                    labels: forecastMetrics, datasets: [{
+                        label: `${forecastWeeks} Week Forecast Quality`,
+                        data: forecastValues,
+                        borderColor: '#667eea', backgroundColor: 'rgba(102, 126, 234, 0.2)',
+                        pointBackgroundColor: '#667eea', pointBorderColor: '#fff',
+                        pointHoverBackgroundColor: '#fff', pointHoverBorderColor: '#667eea'
+                    }]
+                }, options: {
+                    responsive: true,
+                    scales: { r: { beginAtZero: true, max: 100, title: { display: true, text: 'Quality Score (%)' } } },
+                    plugins: {
+                        title: { display: true, text: `Forecast Quality Assessment` },
+                        legend: { display: true, position: 'top' }
+                    }
+                }
+            });
+        }
+
+        // Use real training performance data instead of fake data
+        function updateAccuracyChart() {
+            const ctx = document.getElementById('accuracyChart').getContext('2d');
+            if (accuracyChart) accuracyChart.destroy();
+
+            // Use real training performance data if available
+            if (currentTrainingPerformance) {
+                console.log('Using real training performance data:', currentTrainingPerformance);
+                
+                const labels = currentTrainingPerformance.weeks;
+                const actualData = currentTrainingPerformance.actual;
+                const predictedData = currentTrainingPerformance.predicted;
+                
+                // Update the chart title with actual week range information
+                const titleElement = document.getElementById('trainingPerformanceTitle');
+                if (currentTrainingPerformance.week_range && currentTrainingPerformance.total_weeks_available) {
+                    titleElement.textContent = `🎯 Training Performance: Last ${labels.length} weeks (${currentTrainingPerformance.week_range}, Total: ${currentTrainingPerformance.total_weeks_available} weeks)`;
+                }
+
+                accuracyChart = new Chart(ctx, {
+                    type: 'line', 
+                    data: {
+                        labels: labels, 
+                        datasets: [{
+                            label: 'Actual Training Data', 
+                            data: actualData,
+                            borderColor: '#4ECDC4', 
+                            backgroundColor: 'rgba(78, 205, 196, 0.1)',
+                            fill: false, 
+                            tension: 0.4,
+                            pointRadius: 4
+                        }, {
+                            label: 'Prophet Predictions (Training)', 
+                            data: predictedData,
+                            borderColor: '#667eea', 
+                            backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                            fill: false, 
+                            tension: 0.4,
+                            pointRadius: 4,
+                            borderDash: [5, 5]
+                        }]
+                    }, 
+                    options: {
+                        responsive: true,
+                        interaction: { intersect: false, mode: 'index' },
+                        scales: { 
+                            y: { beginAtZero: true, title: { display: true, text: 'Orders' } },
+                            x: { 
+                                title: { 
+                                    display: true, 
+                                    text: `Evaluation Period (${currentTrainingPerformance.week_range || 'Recent Weeks'})` 
+                                } 
+                            }
+                        },
+                        plugins: {
+                            title: { 
+                                display: true, 
+                                text: `Training Performance: Prophet vs Actual Data (${labels.length} weeks shown)` 
+                            },
+                            legend: { display: true, position: 'top' }
+                        }
+                    }
+                });
+                
+            } else {
+                // Fallback: Show message that training performance data is not available
+                console.log('No training performance data available, showing placeholder');
+                
+                accuracyChart = new Chart(ctx, {
+                    type: 'bar', 
+                    data: {
+                        labels: ['Training Performance'], 
+                        datasets: [{
+                            label: 'Training data not available for visualization', 
+                            data: [0],
+                            backgroundColor: 'rgba(200, 200, 200, 0.5)'
+                        }]
+                    }, 
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            title: { 
+                                display: true, 
+                                text: 'Training Performance Data Not Available' 
+                            }
+                        }
+                    }
+                });
+            }
+        }
+
+        function showInsights() {
+            const insights = [];
+            
+            if (currentMetrics) {
+                if (currentMetrics.accuracy > 90) {
+                    insights.push("🎯 Excellent model performance - Prophet is highly accurate for this regional data");
+                } else if (currentMetrics.accuracy > 80) {
+                    insights.push("✅ Good model performance - Prophet provides reliable regional forecasts");
+                } else if (currentMetrics.accuracy > 70) {
+                    insights.push("⚠️ Moderate performance - consider regional feature engineering or parameter tuning");
+                } else {
+                    insights.push("❌ Lower accuracy - regional data may need preprocessing or different modeling approach");
+                }
+                
+                if (currentMetrics.r2 > 0.8) {
+                    insights.push("📊 Strong correlation between predictions and actual regional values");
+                } else if (currentMetrics.r2 > 0.6) {
+                    insights.push("📈 Moderate predictive power - model captures main regional patterns");
+                } else {
+                    insights.push("📉 Weak correlation - consider adding more regional features or longer training period");
+                }
+                
+                if (Math.abs(currentMetrics.bias) < 50) {
+                    insights.push("⚖️ Well-calibrated regional model with minimal bias");
+                } else if (currentMetrics.bias > 50) {
+                    insights.push("📈 Model tends to over-predict - adjust for conservative regional planning");
+                } else {
+                    insights.push("📉 Model tends to under-predict - consider regional safety stock buffers");
+                }
+            }
+            
+            if (currentForecast) {
+                const avgForecast = currentForecast.predicted.reduce((a, b) => a + b, 0) / currentForecast.predicted.length;
+                const totalForecast = currentForecast.predicted.reduce((a, b) => a + b, 0);
+                insights.push(`📦 Expected weekly regional demand: ${Math.round(avgForecast).toLocaleString()} orders`);
+                insights.push(`🎯 Total ${currentForecast.weeks.length}-week regional forecast: ${totalForecast.toLocaleString()} orders`);
+            }
+            
+            // Add insights about training performance if available
+            if (currentTrainingPerformance) {
+                insights.push("📊 Training performance visualization shows actual vs predicted comparison on historical data");
+                const trainingAccuracy = currentMetrics ? currentMetrics.accuracy : null;
+                if (trainingAccuracy && trainingAccuracy > 85) {
+                    insights.push("✅ Strong training performance indicates reliable future forecasts");
+                }
+            }
+            
+            insights.push("🗺️ Use regional Prophet forecasts for distributed inventory planning and capacity management");
+            insights.push("📅 Regional seasonality patterns help optimize center-specific marketing campaigns");
+            insights.push("🔄 Retrain regional models weekly with new data for optimal performance");
+            
+            if (currentMetrics && currentMetrics.accuracy > 85) {
+                insights.push("💰 High regional accuracy enables just-in-time inventory strategies");
+                insights.push("📈 Consider Prophet for regional financial planning and resource allocation");
+            }
+            
+            insights.push("🔄 Compare regional models to identify high/low performing areas");
+            insights.push("🎯 Use regional forecasts to optimize delivery routes and logistics");
+            insights.push("📊 Regional demand patterns inform center expansion strategies");
+            
+            if (currentMetrics) {
+                if (currentMetrics.mape < 10) {
+                    insights.push("🎯 Very low regional prediction error - suitable for automated ordering systems");
+                } else if (currentMetrics.mape < 20) {
+                    insights.push("✅ Acceptable regional prediction error for most business applications");
+                } else {
+                    insights.push("⚠️ High regional prediction error - implement manual review processes");
+                }
+            }
+
+            document.getElementById('insightsList').innerHTML = insights.map(insight => `<li>${insight}</li>`).join('');
+        }
+
+        function showLoading(show) { document.getElementById('loadingSection').style.display = show ? 'block' : 'none'; }
+        function disableButtons(disable) {
+            document.getElementById('trainBtn').disabled = disable;
+            if (disable) document.getElementById('forecastBtn').disabled = true;
+        }
+
+        function showStatusMessage(message, type) {
+            const statusSection = document.getElementById('statusSection');
+            const statusMessage = document.getElementById('statusMessage');
+            statusMessage.innerHTML = message;
+            
+            if (type === 'success') {
+                statusSection.style.background = 'linear-gradient(135deg, #4ECDC4, #44A08D)';
+            } else if (type === 'error') {
+                statusSection.style.background = 'linear-gradient(135deg, #FF6B6B, #FF5722)';
+            } else {
+                statusSection.style.background = 'linear-gradient(135deg, #667eea, #764ba2)';
+            }
+            
+            setTimeout(() => {
+                statusSection.style.background = 'linear-gradient(135deg, #667eea, #764ba2)';
+            }, 5000);
+        }
+
+        setInterval(loadSystemStatus, 30000);
+    </script>
+</body>
+</html>
