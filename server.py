@@ -138,12 +138,15 @@ class ForecastingHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
         forecast, message = forecaster.generate_forecast(model_key, weeks, confidence)
         
         if forecast is not None:
-            # Get the actual model info to extract meal_id
+            # Get the actual model info to extract meal_id and meal_name
             model_info = None
             for key, info in forecaster.models.items():
                 if key == model_key or key.replace('meal_', 'all_') == model_key or key.replace('all_', 'meal_') == model_key:
                     model_info = info
                     break
+            
+            meal_id = model_info['meal_id'] if model_info else None
+            meal_name = forecaster.get_meal_display_name(meal_id) if meal_id else None
             
             # Convert forecast to JSON-serializable format
             forecast_data = {
@@ -153,7 +156,8 @@ class ForecastingHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
                 'lower': forecast['yhat_lower'].round().astype(int).tolist(),
                 'trend': forecast['trend'].round().astype(int).tolist(),
                 'confidence_level': confidence * 100,
-                'meal_id': model_info['meal_id'] if model_info else None  # Add meal_id to response
+                'meal_id': meal_id,
+                'meal_name': meal_name  # Add meal name to response
             }
             
             response = {
@@ -162,7 +166,7 @@ class ForecastingHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
                 'forecast': forecast_data,
                 'model_used': model_key
             }
-            print(f"✅ Forecast generated successfully")
+            print(f"✅ Forecast generated successfully for {meal_name or f'Meal {meal_id}'}")
         else:
             response = {
                 'success': False,

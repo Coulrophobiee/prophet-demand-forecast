@@ -397,18 +397,62 @@
             const regionSelect = document.getElementById('regionSelect');
             const mealSelect = document.getElementById('mealSelect');
             regionSelect.innerHTML = '<option value="">All Regions</option>';
-            mealSelect.innerHTML = '<option value="">All Meals</option>';
+            mealSelect.innerHTML = '<option value="">Select a specific meal...</option>';
             
-            ['Region_1', 'Region_2', 'Region_3', 'Region_4'].forEach(region => {
-                const option = document.createElement('option');
-                option.value = region; option.textContent = region;
-                regionSelect.appendChild(option);
-            });
+            // Use actual regions from data instead of hardcoded ones
+            if (data.data_info.regions && data.data_info.regions.length > 0) {
+                data.data_info.regions.forEach(region => {
+                    const option = document.createElement('option');
+                    option.value = region; 
+                    option.textContent = region;
+                    regionSelect.appendChild(option);
+                });
+                debugLog('Populated regions from data', data.data_info.regions);
+            } else {
+                // Fallback to default regions
+                ['Region_1', 'Region_2', 'Region_3', 'Region_4'].forEach(region => {
+                    const option = document.createElement('option');
+                    option.value = region; 
+                    option.textContent = region;
+                    regionSelect.appendChild(option);
+                });
+                debugLog('Used fallback regions');
+            }
             
-            data.data_info.meals.forEach(meal => {
-                const option = document.createElement('option');
-                option.value = meal; option.textContent = `Meal ${meal}`;
-                mealSelect.appendChild(option);
+            // Use meal names if available, otherwise fall back to IDs
+            if (data.data_info.meals_with_names && data.data_info.meals_with_names.length > 0) {
+                // Sort meals by name for better user experience
+                const sortedMeals = data.data_info.meals_with_names.sort((a, b) => {
+                    return a.name.localeCompare(b.name);
+                });
+                
+                sortedMeals.forEach(meal => {
+                    const option = document.createElement('option');
+                    option.value = meal.id;
+                    option.textContent = `${meal.name} (ID: ${meal.id})`;
+                    option.title = meal.name; // Show full name on hover
+                    mealSelect.appendChild(option);
+                });
+                
+                debugLog('Populated meals with names', {
+                    total: sortedMeals.length,
+                    sample: sortedMeals.slice(0, 3).map(m => `${m.id}: ${m.name}`)
+                });
+            } else {
+                // Fallback to meal IDs only
+                data.data_info.meals.forEach(meal => {
+                    const option = document.createElement('option');
+                    option.value = meal; 
+                    option.textContent = `Meal ${meal}`;
+                    mealSelect.appendChild(option);
+                });
+                
+                debugLog('Populated meals with IDs only', data.data_info.meals.length);
+            }
+            
+            debugLog('Selectors populated', {
+                regions: data.data_info.regions?.length || 4,
+                meals: data.data_info.meals_with_names?.length || data.data_info.meals.length
             });
         }
 
@@ -649,6 +693,23 @@
             const forecastWeeks = currentForecast.weeks.length;
             const mealId = currentForecast.meal_id || 'Unknown';
             
+            // Get meal name from the current forecast or metrics
+            let mealName = 'Unknown Meal';
+            if (currentForecast.meal_name) {
+                mealName = currentForecast.meal_name;
+            } else if (currentMetrics && currentMetrics.meal_name) {
+                mealName = currentMetrics.meal_name;
+            } else if (mealId !== 'Unknown') {
+                // Try to find the meal name in the selectors
+                const mealSelect = document.getElementById('mealSelect');
+                const selectedOption = Array.from(mealSelect.options).find(opt => opt.value == mealId);
+                if (selectedOption) {
+                    mealName = selectedOption.textContent.split(' (ID:')[0]; // Extract name part
+                } else {
+                    mealName = `Meal ${mealId}`;
+                }
+            }
+            
             const lastTrainWeek = 145;
             const labels = currentForecast.weeks.map(w => `Week ${lastTrainWeek + w}`);
 
@@ -658,7 +719,7 @@
                     data: {
                         labels: labels, 
                         datasets: [{
-                            label: `Meal ${mealId} Forecast`, 
+                            label: `${mealName} Forecast`, 
                             data: currentForecast.predicted,
                             borderColor: '#667eea', 
                             backgroundColor: 'rgba(102, 126, 234, 0.1)',
@@ -712,7 +773,7 @@
                         plugins: {
                             title: { 
                                 display: true, 
-                                text: `Meal ${mealId} Forecast: Weeks ${lastTrainWeek + 1} to ${lastTrainWeek + forecastWeeks} (${confidenceLevel}% CI)` 
+                                text: `${mealName}: Weeks ${lastTrainWeek + 1} to ${lastTrainWeek + forecastWeeks} (${confidenceLevel}% CI)` 
                             },
                             legend: { display: true, position: 'top' }
                         }

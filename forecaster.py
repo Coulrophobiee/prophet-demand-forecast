@@ -27,10 +27,52 @@ class FoodDemandForecaster:
         self.weekly_demand = None
         self.data_availability = {}
         self.meal_price_data = {}
+        self.meal_names = {}  # NEW: Store meal names database
+        
+    def load_meal_names(self):
+        """Load meal names from JSON file"""
+        try:
+            if os.path.exists('meal_database.json'):
+                import json
+                with open('meal_database.json', 'r', encoding='utf-8') as f:
+                    meal_database = json.load(f)
+                
+                # Convert to simple ID -> name mapping
+                self.meal_names = {}
+                for meal_id, meal_info in meal_database.items():
+                    self.meal_names[int(meal_id)] = meal_info.get('name', f'Meal {meal_id}')
+                
+                print(f"🍽️ Loaded {len(self.meal_names)} meal names from meal_database.json")
+                
+                # Show some examples
+                sample_meals = list(self.meal_names.items())[:3]
+                for meal_id, name in sample_meals:
+                    print(f"   • {meal_id}: {name}")
+                if len(self.meal_names) > 3:
+                    print(f"   • ... and {len(self.meal_names) - 3} more")
+                    
+            else:
+                print("ℹ️ meal_database.json not found - using meal IDs only")
+                self.meal_names = {}
+                
+        except Exception as e:
+            print(f"❌ Error loading meal names: {e}")
+            self.meal_names = {}
+    
+    def get_meal_display_name(self, meal_id):
+        """Get display name for a meal (name if available, otherwise ID)"""
+        try:
+            meal_id_int = int(meal_id)
+            return self.meal_names.get(meal_id_int, f"Meal {meal_id}")
+        except:
+            return f"Meal {meal_id}"
         
     def load_data(self):
         """Load train and test datasets"""
         try:
+            # Load meal names first
+            self.load_meal_names()
+            
             if os.path.exists('train.csv'):
                 self.train_data = pd.read_csv('train.csv')
                 print(f"✅ Loaded train.csv: {len(self.train_data)} records")
@@ -93,34 +135,101 @@ class FoodDemandForecaster:
         return detected
 
     def create_regional_mapping(self):
-        """Create regional mapping for centers"""
+        """Create regional mapping for centers using fulfilment_center_info.csv"""
         if self.train_data is None:
             return {}
         
-        # Get all unique centers
-        centers = sorted(self.train_data['center_id'].unique())
-        total_centers = len(centers)
-        
-        print(f"📍 Found {total_centers} centers: {centers}")
-        
-        # Divide centers into 4 regions
-        centers_per_region = total_centers // 4
-        remainder = total_centers % 4
-        
+        # Try to load fulfilment center info
         regional_mapping = {}
-        current_index = 0
+        geographical_mapping = {56: "Kassel", 34: "Lyon", 77: "Wien", 85: "Luzern"}
         
-        # Create 4 regions
-        for region_num in range(1, 5):
-            region_name = f"Region_{region_num}"
-            region_size = centers_per_region + (1 if region_num <= remainder else 0)
-            region_centers = centers[current_index:current_index + region_size]
+        try:
+            if os.path.exists('fulfilment_center_info.csv'):
+                print("📍 Loading regional mapping from fulfilment_center_info.csv")
+                center_info = pd.read_csv('fulfilment_center_info.csv')
+                
+                print(f"📋 Fulfilment center data loaded: {len(center_info)} centers")
+                print(f"📋 Columns: {list(center_info.columns)}")
+                
+                # Create mapping based on region_code
+                region_code_mapping = {}
+                
+                for _, row in center_info.iterrows():
+                    center_id = row['center_id']
+                    region_code = row['region_code']
+                    
+                    # Apply your region consolidation rules
+                    if region_code in [56, 34, 77]:
+                        final_region = f"Region-{geographical_mapping.get(region_code, 'Unknown')}"
+                    else:
+                        final_region = "Region-Luzern"  # All other regions go to Luzern (85)
+                    
+                    regional_mapping[center_id] = final_region
+                    region_code_mapping[center_id] = region_code
+                
+                # Print detailed mapping
+                print(f"🗺️ Regional mapping created from fulfilment center info:")
+                
+                # Group by final region for summary
+                region_summary = {}
+                for center_id, region in regional_mapping.items():
+                    if region not in region_summary:
+                        region_summary[region] = []
+                    region_summary[region].append(center_id)
+                
+                for region, centers in sorted(region_summary.items()):
+                    original_codes = [region_code_mapping[c] for c in centers]
+                    print(f"   {region}: Centers {sorted(centers)} (original codes: {sorted(set(original_codes))})")
+                
+                # Check if all centers from train data are covered
+                train_centers = set(self.train_data['center_id'].unique())
+                mapped_centers = set(regional_mapping.keys())
+                
+                if not train_centers.issubset(mapped_centers):
+                    missing_centers = train_centers - mapped_centers
+                    print(f"⚠️ Missing centers in fulfilment info: {sorted(missing_centers)}")
+                    # Assign missing centers to Region-Luzern (default consolidation region)
+                    for center in missing_centers:
+                        regional_mapping[center] = "Region-Luzern"
+                        print(f"   → Assigned center {center} to Region-Luzern (not in fulfilment info)")
+                
+                print(f"✅ Final regional mapping: {len(regional_mapping)} centers across {len(set(regional_mapping.values()))} regions")
+                
+            else:
+                print("📍 fulfilment_center_info.csv not found, using automatic regional mapping")
+                # Fallback to automatic mapping with geographical names
+                centers = sorted(self.train_data['center_id'].unique())
+                total_centers = len(centers)
+                
+                print(f"📍 Found {total_centers} centers: {centers}")
+                
+                # Divide centers into 4 regions with geographical names
+                centers_per_region = total_centers // 4
+                remainder = total_centers % 4
+                
+                current_index = 0
+                region_names = ["Region-Kassel", "Region-Lyon", "Region-Wien", "Region-Luzern"]
+                
+                for i, region_name in enumerate(region_names):
+                    region_size = centers_per_region + (1 if i < remainder else 0)
+                    region_centers = centers[current_index:current_index + region_size]
+                    
+                    for center in region_centers:
+                        regional_mapping[center] = region_name
+                    
+                    current_index += region_size
+                    print(f"🗺️ {region_name}: Centers {region_centers} ({len(region_centers)} centers)")
+                
+        except Exception as e:
+            print(f"❌ Error loading fulfilment center info: {e}")
+            print("📍 Falling back to automatic regional mapping")
             
-            for center in region_centers:
+            # Fallback to automatic mapping with geographical names
+            centers = sorted(self.train_data['center_id'].unique())
+            region_names = ["Region-Kassel", "Region-Lyon", "Region-Wien", "Region-Luzern"]
+            for i, center in enumerate(centers):
+                region_name = region_names[i % 4]
                 regional_mapping[center] = region_name
-            
-            current_index += region_size
-            print(f"🗺️ {region_name}: Centers {region_centers} ({len(region_centers)} centers)")
         
         return regional_mapping
 
@@ -136,10 +245,56 @@ class FoodDemandForecaster:
         else:
             print("⚠️ checkout_price column not found - skipping price regression")
 
+    def filter_meals(self):
+        """Remove meals with insufficient coverage"""
+        meals_to_remove = [1571, 2104, 2956, 2490, 2569, 2664]
+        
+        if self.train_data is not None and 'meal_id' in self.train_data.columns:
+            initial_meals = set(self.train_data['meal_id'].unique())
+            initial_count = len(self.train_data)
+            
+            print(f"🍽️ Filtering meals with insufficient coverage...")
+            print(f"📊 Initial meals: {len(initial_meals)} total")
+            print(f"📊 Initial records: {initial_count:,}")
+            
+            # Filter out specified meals
+            meals_found = [meal for meal in meals_to_remove if meal in initial_meals]
+            meals_not_found = [meal for meal in meals_to_remove if meal not in initial_meals]
+            
+            if meals_found:
+                print(f"🗑️ Removing meals: {meals_found}")
+                self.train_data = self.train_data[~self.train_data['meal_id'].isin(meals_to_remove)]
+                
+                # Also filter test data if it exists
+                if self.test_data is not None and 'meal_id' in self.test_data.columns:
+                    self.test_data = self.test_data[~self.test_data['meal_id'].isin(meals_to_remove)]
+                
+                final_meals = set(self.train_data['meal_id'].unique())
+                final_count = len(self.train_data)
+                removed_count = initial_count - final_count
+                
+                print(f"✅ Filtering complete:")
+                print(f"   • Meals removed: {len(meals_found)}")
+                print(f"   • Records removed: {removed_count:,}")
+                print(f"   • Remaining meals: {len(final_meals)}")
+                print(f"   • Remaining records: {final_count:,}")
+                print(f"   • Data reduction: {(removed_count/initial_count)*100:.1f}%")
+                
+            else:
+                print(f"ℹ️ No meals to remove found in dataset")
+            
+            if meals_not_found:
+                print(f"⚠️ Meals not found in dataset: {meals_not_found}")
+        else:
+            print(f"⚠️ No meal data available for filtering")
+
     def preprocess_data(self):
         """Preprocess data for Prophet model with checkout_price regressor"""
         if self.train_data is None:
             return
+        
+        # Filter meals with insufficient coverage FIRST
+        self.filter_meals()
         
         # Create regional mapping
         self.regional_mapping = self.create_regional_mapping()
@@ -714,14 +869,29 @@ class FoodDemandForecaster:
     
     def get_model_summary(self):
         """Get summary of all trained models and their performance"""
+        # Get actual regions from the regional mapping
+        actual_regions = sorted(set(self.regional_mapping.values())) if self.regional_mapping else ['Region_1', 'Region_2', 'Region_3', 'Region_4']
+        
+        # Create meals list with names for frontend
+        meals_list = []
+        if self.train_data is not None and 'meal_id' in self.train_data.columns:
+            unique_meals = sorted(self.train_data['meal_id'].unique())
+            for meal_id in unique_meals:
+                meals_list.append({
+                    'id': meal_id,
+                    'name': self.get_meal_display_name(meal_id),
+                    'display': f"{meal_id}: {self.get_meal_display_name(meal_id)}"
+                })
+        
         summary = {
             'models_trained': len(self.models),
             'models': {},
             'data_info': {
                 'train_records': len(self.train_data) if self.train_data is not None else 0,
                 'test_records': len(self.test_data) if self.test_data is not None else 0,
-                'regions': ['Region_1', 'Region_2', 'Region_3', 'Region_4'],
-                'meals': list(self.train_data['meal_id'].unique()) if self.train_data is not None and 'meal_id' in self.train_data.columns else [],
+                'regions': actual_regions,
+                'meals': [meal['id'] for meal in meals_list],  # Keep backward compatibility
+                'meals_with_names': meals_list,  # NEW: Full meal info
                 'weeks_range': [
                     int(self.train_data['week'].min()) if self.train_data is not None else 0,
                     int(self.train_data['week'].max()) if self.train_data is not None else 0
@@ -738,6 +908,7 @@ class FoodDemandForecaster:
                 'performance': self.performance_metrics.get(key, {}),
                 'has_forecast': key in self.forecasts,
                 'meal_id': model_info.get('meal_id'),
+                'meal_name': self.get_meal_display_name(model_info.get('meal_id')) if model_info.get('meal_id') else None,
                 'region_id': model_info.get('region_id'),
                 'regressors': model_info.get('regressors', []),
                 'training_weeks': model_info.get('training_weeks', 0),
