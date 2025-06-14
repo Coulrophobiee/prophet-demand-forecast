@@ -123,6 +123,10 @@
             background: #ffe6e6; color: #d63384; padding: 15px;
             border-radius: 10px; margin: 10px 0; border-left: 4px solid #d63384;
         }
+        .selection-preserved {
+            border-color: #28a745 !important;
+            box-shadow: 0 0 0 3px rgba(40, 167, 69, 0.1) !important;
+        }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         @media (max-width: 768px) {
             .charts { grid-template-columns: 1fr; }
@@ -236,6 +240,15 @@
         let dataAvailability = null;
         let forecastChart = null, performanceChart = null, accuracyChart = null;
         let debugMode = false;
+        
+        // User selection preservation
+        let userSelections = {
+            meal: '',
+            region: '',
+            forecastWeeks: 10,
+            confidence: 95
+        };
+        let isInitialLoad = true;
 
         // Debug logging function
         function debugLog(message, data = null) {
@@ -270,12 +283,61 @@
             }
         }
 
+        // Store user selections whenever they change
+        function storeUserSelections() {
+            userSelections.meal = document.getElementById('mealSelect').value;
+            userSelections.region = document.getElementById('regionSelect').value;
+            userSelections.forecastWeeks = document.getElementById('forecastWeeks').value;
+            userSelections.confidence = document.getElementById('confidence').value;
+            
+            debugLog('User selections stored', userSelections);
+        }
+
+        // Restore user selections after dropdown population
+        function restoreUserSelections() {
+            if (isInitialLoad) {
+                debugLog('Skipping restoration on initial load');
+                isInitialLoad = false;
+                return;
+            }
+
+            debugLog('Restoring user selections', userSelections);
+            
+            const mealSelect = document.getElementById('mealSelect');
+            const regionSelect = document.getElementById('regionSelect');
+            const forecastWeeks = document.getElementById('forecastWeeks');
+            const confidence = document.getElementById('confidence');
+            
+            // Restore selections if options exist
+            if (userSelections.meal && Array.from(mealSelect.options).some(opt => opt.value === userSelections.meal)) {
+                mealSelect.value = userSelections.meal;
+                mealSelect.classList.add('selection-preserved');
+                setTimeout(() => mealSelect.classList.remove('selection-preserved'), 2000);
+            }
+            
+            if (userSelections.region && Array.from(regionSelect.options).some(opt => opt.value === userSelections.region)) {
+                regionSelect.value = userSelections.region;
+                regionSelect.classList.add('selection-preserved');
+                setTimeout(() => regionSelect.classList.remove('selection-preserved'), 2000);
+            }
+            
+            forecastWeeks.value = userSelections.forecastWeeks;
+            confidence.value = userSelections.confidence;
+            
+            // Update selection info after restoration
+            updateSelectionInfo();
+        }
+
         function showError(message, error = null) {
+            // Clean up the message first
+            const cleanMessage = formatErrorMessage(message);
+            const cleanError = error ? formatErrorMessage(error) : null;
+            
             const errorDiv = document.createElement('div');
             errorDiv.className = 'error-message';
-            errorDiv.innerHTML = `<strong>Error:</strong> ${message}`;
-            if (error) {
-                errorDiv.innerHTML += `<br><small>${error}</small>`;
+            errorDiv.innerHTML = `<strong>Error:</strong> ${cleanMessage}`;
+            if (cleanError) {
+                errorDiv.innerHTML += `<br><small>${cleanError}</small>`;
             }
             
             document.querySelector('.container').insertBefore(errorDiv, document.querySelector('.controls'));
@@ -291,8 +353,20 @@
         document.addEventListener('DOMContentLoaded', function() {
             debugLog('DOM loaded, initializing system');
             loadSystemStatus();
-            document.getElementById('regionSelect').addEventListener('change', updateSelectionInfo);
-            document.getElementById('mealSelect').addEventListener('change', updateSelectionInfo);
+            
+            // Add event listeners for selection preservation
+            document.getElementById('regionSelect').addEventListener('change', function() {
+                storeUserSelections();
+                updateSelectionInfo();
+            });
+            
+            document.getElementById('mealSelect').addEventListener('change', function() {
+                storeUserSelections();
+                updateSelectionInfo();
+            });
+            
+            document.getElementById('forecastWeeks').addEventListener('change', storeUserSelections);
+            document.getElementById('confidence').addEventListener('change', storeUserSelections);
         });
 
         async function loadSystemStatus() {
@@ -396,6 +470,11 @@
         function populateSelectors(data) {
             const regionSelect = document.getElementById('regionSelect');
             const mealSelect = document.getElementById('mealSelect');
+            
+            // Store current selections before clearing
+            const currentMeal = mealSelect.value;
+            const currentRegion = regionSelect.value;
+            
             regionSelect.innerHTML = '<option value="">All Regions</option>';
             mealSelect.innerHTML = '<option value="">Select a specific meal...</option>';
             
@@ -454,6 +533,9 @@
                 regions: data.data_info.regions?.length || 4,
                 meals: data.data_info.meals_with_names?.length || data.data_info.meals.length
             });
+            
+            // Restore user selections after populating
+            restoreUserSelections();
         }
 
         async function trainModel() {
@@ -499,14 +581,16 @@
                     showStatusMessage('✅ Prophet model trained successfully! (Evaluation data unavailable)', 'success');
                 } else {
                     debugLog('Training failed', data);
-                    showStatusMessage('❌ ' + (data.message || 'Training failed'), 'error');
-                    showError('Training failed', data.message);
+                    const cleanMessage = formatErrorMessage(data.message || 'Training failed');
+                    showStatusMessage('❌ ' + cleanMessage, 'error');
+                    showError('Training failed', cleanMessage);
                 }
             } catch (error) {
                 debugLog('Training error', error);
                 console.error('Training error:', error);
-                showStatusMessage('❌ Error training model: ' + error.message, 'error');
-                showError('Training request failed', error.message);
+                const cleanMessage = formatErrorMessage(error.message);
+                showStatusMessage('❌ Error training model: ' + cleanMessage, 'error');
+                showError('Training request failed', cleanMessage);
             }
             showLoading(false); 
             disableButtons(false);
@@ -561,14 +645,16 @@
                     showStatusMessage(`✅ Forecast generated with ${confidence}% confidence intervals!`, 'success');
                 } else {
                     debugLog('Forecast failed', data);
-                    showStatusMessage('❌ ' + (data.message || 'Forecast generation failed'), 'error');
-                    showError('Forecast generation failed', data.message);
+                    const cleanMessage = formatErrorMessage(data.message || 'Forecast generation failed');
+                    showStatusMessage('❌ ' + cleanMessage, 'error');
+                    showError('Forecast generation failed', cleanMessage);
                 }
             } catch (error) {
                 debugLog('Forecast error', error);
                 console.error('Forecast error:', error);
-                showStatusMessage('❌ Error generating forecast: ' + error.message, 'error');
-                showError('Forecast request failed', error.message);
+                const cleanMessage = formatErrorMessage(error.message);
+                showStatusMessage('❌ Error generating forecast: ' + cleanMessage, 'error');
+                showError('Forecast request failed', cleanMessage);
             }
             showLoading(false);
         }
@@ -1079,7 +1165,36 @@
         function showStatusMessage(message, type) {
             const statusSection = document.getElementById('statusSection');
             const statusMessage = document.getElementById('statusMessage');
-            statusMessage.innerHTML = message;
+            
+            // Clean up ugly error messages
+            let cleanMessage = message;
+            
+            // Fix the double ❌ issue
+            cleanMessage = cleanMessage.replace(/❌\s*❌/g, '❌');
+            
+            // Format region lists nicely
+            if (cleanMessage.includes('[') && cleanMessage.includes(']')) {
+                // Extract and format region lists
+                cleanMessage = cleanMessage.replace(/\[([^\]]+)\]/g, (match, regions) => {
+                    // Split by comma and clean up quotes
+                    const regionList = regions.split(',').map(r => r.trim().replace(/['"]/g, ''));
+                    
+                    if (regionList.length === 1) {
+                        return regionList[0];
+                    } else if (regionList.length === 2) {
+                        return regionList.join(' and ');
+                    } else {
+                        const lastRegion = regionList.pop();
+                        return regionList.join(', ') + ', and ' + lastRegion;
+                    }
+                });
+            }
+            
+            // Clean up specific error patterns
+            cleanMessage = cleanMessage.replace(/This meal is available in:/g, 'Available regions:');
+            cleanMessage = cleanMessage.replace(/Available meals:/g, 'Try these meals instead:');
+            
+            statusMessage.innerHTML = cleanMessage;
             
             if (type === 'success') {
                 statusSection.style.background = 'linear-gradient(135deg, #4ECDC4, #44A08D)';
@@ -1094,12 +1209,68 @@
             }, 5000);
         }
 
-        // Auto-refresh system status periodically
-        setInterval(() => {
-            if (!debugMode) {  // Only auto-refresh if not in debug mode
-                loadSystemStatus();
+        function formatErrorMessage(message) {
+            let formatted = message;
+            
+            // Remove duplicate error icons
+            formatted = formatted.replace(/❌\s*❌/g, '❌');
+            
+            // Format lists nicely
+            if (formatted.includes('[') && formatted.includes(']')) {
+                formatted = formatted.replace(/\[([^\]]+)\]/g, (match, content) => {
+                    const items = content.split(',').map(item => item.trim().replace(/['"]/g, ''));
+                    
+                    if (items.length === 1) {
+                        return items[0];
+                    } else if (items.length === 2) {
+                        return items.join(' and ');
+                    } else {
+                        const last = items.pop();
+                        return items.join(', ') + ', and ' + last;
+                    }
+                });
             }
-        }, 30000);
+            
+            return formatted;
+        }
+
+        // Modified auto-refresh to preserve selections - now only refreshes if no user activity
+        let lastUserActivity = Date.now();
+        let autoRefreshInterval = null;
+
+        function resetUserActivity() {
+            lastUserActivity = Date.now();
+            debugLog('User activity detected, resetting auto-refresh timer');
+        }
+
+        function startAutoRefresh() {
+            // Clear any existing interval
+            if (autoRefreshInterval) {
+                clearInterval(autoRefreshInterval);
+            }
+            
+            // Check every 30 seconds, but only refresh if no user activity for 2 minutes
+            autoRefreshInterval = setInterval(() => {
+                const timeSinceActivity = Date.now() - lastUserActivity;
+                const twoMinutes = 2 * 60 * 1000;
+                
+                if (timeSinceActivity > twoMinutes && !debugMode) {
+                    debugLog('Auto-refreshing system status (no user activity for 2+ minutes)');
+                    loadSystemStatus();
+                    lastUserActivity = Date.now(); // Reset after refresh
+                }
+            }, 30000);
+            
+            debugLog('Auto-refresh started - will refresh after 2 minutes of inactivity');
+        }
+
+        // Track user interactions to prevent auto-refresh during active use
+        ['click', 'keydown', 'change', 'input'].forEach(eventType => {
+            document.addEventListener(eventType, resetUserActivity, true);
+        });
+
+        // Start auto-refresh after initial load
+        setTimeout(startAutoRefresh, 5000);
 
         // Chart.js error handling
         Chart.defaults.plugins.legend.display = true;

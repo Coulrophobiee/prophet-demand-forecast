@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Food Demand Forecaster - Prophet Model Implementation
-Fixed version with proper model key handling
+Enhanced version with robust regional mapping and better error handling
 """
 
 import pandas as pd # type: ignore
@@ -27,7 +27,7 @@ class FoodDemandForecaster:
         self.weekly_demand = None
         self.data_availability = {}
         self.meal_price_data = {}
-        self.meal_names = {}  # NEW: Store meal names database
+        self.meal_names = {}  # Store meal names database
         
     def load_meal_names(self):
         """Load meal names from JSON file"""
@@ -135,13 +135,11 @@ class FoodDemandForecaster:
         return detected
 
     def create_regional_mapping(self):
-        """Create regional mapping for centers using fulfilment_center_info.csv"""
+        """Create robust regional mapping for centers"""
         if self.train_data is None:
             return {}
         
-        # Try to load fulfilment center info
         regional_mapping = {}
-        geographical_mapping = {56: "Kassel", 34: "Lyon", 77: "Wien", 85: "Luzern"}
         
         try:
             if os.path.exists('fulfilment_center_info.csv'):
@@ -151,21 +149,22 @@ class FoodDemandForecaster:
                 print(f"📋 Fulfilment center data loaded: {len(center_info)} centers")
                 print(f"📋 Columns: {list(center_info.columns)}")
                 
-                # Create mapping based on region_code
-                region_code_mapping = {}
-                
+                # Create mapping based on region_code with improved consolidation
                 for _, row in center_info.iterrows():
                     center_id = row['center_id']
                     region_code = row['region_code']
                     
-                    # Apply your region consolidation rules
-                    if region_code in [56, 34, 77]:
-                        final_region = f"Region-{geographical_mapping.get(region_code, 'Unknown')}"
-                    else:
-                        final_region = "Region-Luzern"  # All other regions go to Luzern (85)
+                    # Map region codes to standardized region names
+                    if region_code == 56:
+                        final_region = "Region-Kassel"
+                    elif region_code == 34:
+                        final_region = "Region-Lyon"  
+                    elif region_code == 77:
+                        final_region = "Region-Wien"
+                    else:  # region_code == 85 or any other
+                        final_region = "Region-Luzern"
                     
                     regional_mapping[center_id] = final_region
-                    region_code_mapping[center_id] = region_code
                 
                 # Print detailed mapping
                 print(f"🗺️ Regional mapping created from fulfilment center info:")
@@ -178,32 +177,44 @@ class FoodDemandForecaster:
                     region_summary[region].append(center_id)
                 
                 for region, centers in sorted(region_summary.items()):
-                    original_codes = [region_code_mapping[c] for c in centers]
-                    print(f"   {region}: Centers {sorted(centers)} (original codes: {sorted(set(original_codes))})")
+                    print(f"   {region}: Centers {sorted(centers)} ({len(centers)} centers)")
                 
-                # Check if all centers from train data are covered
+                # Check data availability per region
                 train_centers = set(self.train_data['center_id'].unique())
                 mapped_centers = set(regional_mapping.keys())
                 
                 if not train_centers.issubset(mapped_centers):
                     missing_centers = train_centers - mapped_centers
                     print(f"⚠️ Missing centers in fulfilment info: {sorted(missing_centers)}")
-                    # Assign missing centers to Region-Luzern (default consolidation region)
+                    # Assign missing centers to Region-Luzern (default)
                     for center in missing_centers:
                         regional_mapping[center] = "Region-Luzern"
-                        print(f"   → Assigned center {center} to Region-Luzern (not in fulfilment info)")
+                        print(f"   → Assigned center {center} to Region-Luzern (missing from fulfilment info)")
+                
+                # Check actual data availability per region
+                print(f"\n📊 Data availability analysis per region:")
+                for region in sorted(set(regional_mapping.values())):
+                    region_centers = [c for c, r in regional_mapping.items() if r == region]
+                    region_data = self.train_data[self.train_data['center_id'].isin(region_centers)]
+                    
+                    if len(region_data) > 0:
+                        unique_meals = len(region_data['meal_id'].unique()) if 'meal_id' in region_data.columns else 0
+                        total_records = len(region_data)
+                        week_range = f"{region_data['week'].min()}-{region_data['week'].max()}" if 'week' in region_data.columns else "N/A"
+                        print(f"   ✅ {region}: {total_records:,} records, {unique_meals} meals, weeks {week_range}")
+                    else:
+                        print(f"   ❌ {region}: NO DATA AVAILABLE")
                 
                 print(f"✅ Final regional mapping: {len(regional_mapping)} centers across {len(set(regional_mapping.values()))} regions")
                 
             else:
                 print("📍 fulfilment_center_info.csv not found, using automatic regional mapping")
-                # Fallback to automatic mapping with geographical names
                 centers = sorted(self.train_data['center_id'].unique())
                 total_centers = len(centers)
                 
                 print(f"📍 Found {total_centers} centers: {centers}")
                 
-                # Divide centers into 4 regions with geographical names
+                # Divide centers into 4 regions with standardized names
                 centers_per_region = total_centers // 4
                 remainder = total_centers % 4
                 
@@ -222,14 +233,13 @@ class FoodDemandForecaster:
                 
         except Exception as e:
             print(f"❌ Error loading fulfilment center info: {e}")
-            print("📍 Falling back to automatic regional mapping")
+            print("📍 Falling back to minimal regional mapping")
             
-            # Fallback to automatic mapping with geographical names
+            # Fallback: simple mapping
             centers = sorted(self.train_data['center_id'].unique())
-            region_names = ["Region-Kassel", "Region-Lyon", "Region-Wien", "Region-Luzern"]
             for i, center in enumerate(centers):
-                region_name = region_names[i % 4]
-                regional_mapping[center] = region_name
+                region_names = ["Region-Kassel", "Region-Lyon", "Region-Wien", "Region-Luzern"]
+                regional_mapping[center] = region_names[i % 4]
         
         return regional_mapping
 
@@ -363,7 +373,7 @@ class FoodDemandForecaster:
             
             print(f"📊 Data preprocessed: {total_weeks} weeks of data")
             print(f"📅 Week range: {min_week} - {max_week}")
-            print(f"🗺️ Regional aggregation complete with {len(self.regional_mapping)} centers in 4 regions")
+            print(f"🗺️ Regional aggregation complete with {len(self.regional_mapping)} centers in {len(set(self.regional_mapping.values()))} regions")
             print(f"🍽️ Meal-specific forecasting enabled with checkout_price regressor")
             
         except Exception as e:
@@ -392,7 +402,7 @@ class FoodDemandForecaster:
         print(f"💰 Checkout price statistics calculated for {len(self.meal_price_data)} meals")
 
     def analyze_data_availability(self):
-        """Analyze data availability for meal-specific forecasting"""
+        """Analyze data availability for meal-specific forecasting with improved regional analysis"""
         print("\n🔍 Analyzing data availability for meal-specific forecasting...")
         
         if self.train_aggregated is None or 'meal_id' not in self.train_aggregated.columns:
@@ -400,76 +410,78 @@ class FoodDemandForecaster:
             return
         
         availability = {}
-        min_weeks_required = 20  # Lower threshold for meal-specific (more realistic)
+        min_weeks_required = 20
         
         # Get total weeks for coverage calculation
         overall_weeks = len(self.weekly_demand)
         
         # Check each meal individually (all regions)
+        print(f"\n📊 Analyzing meal availability across all regions:")
         for meal in sorted(self.train_aggregated['meal_id'].unique()):
             meal_data = self.train_aggregated[self.train_aggregated['meal_id'] == meal]
             if len(meal_data) > 0:
                 meal_weekly = meal_data.groupby('week')['num_orders'].sum().reset_index()
                 weeks_count = len(meal_weekly)
                 coverage = weeks_count / overall_weeks
+                avg_demand = meal_weekly['num_orders'].mean()
+                meal_name = self.get_meal_display_name(meal)
                 
                 availability[f"meal_{meal}"] = {
                     'weeks': weeks_count,
                     'sufficient': weeks_count >= min_weeks_required,
-                    'avg_demand': meal_weekly['num_orders'].mean() if weeks_count > 0 else 0,
-                    'description': f"Meal {meal} - All regions ({weeks_count} weeks, {coverage:.1%} coverage)",
+                    'avg_demand': avg_demand,
+                    'description': f"{meal_name} - All regions ({weeks_count} weeks, {coverage:.1%} coverage)",
                     'type': 'meal',
                     'coverage': coverage
                 }
+                
+                status = "✅" if weeks_count >= min_weeks_required else "❌"
+                print(f"   {status} Meal {meal} ({meal_name}): {weeks_count} weeks, avg demand: {avg_demand:.0f}")
         
-        # Check meal + region combinations for top meals
-        top_meals = sorted(
-            [k for k, v in availability.items() if k.startswith('meal_') and v['sufficient']], 
-            key=lambda x: availability[x]['avg_demand'], 
-            reverse=True
-        )[:5]  # Top 5 meals only
+        # Check meal + region combinations for viable meals only
+        print(f"\n📊 Analyzing meal + region combinations:")
+        viable_meals = [k for k, v in availability.items() if k.startswith('meal_') and v['sufficient']]
         
-        for meal_key in top_meals:
+        for meal_key in viable_meals[:10]:  # Limit to top 10 meals to avoid too much output
             meal_id = int(meal_key.split('_')[1])
-            for region in ['Region_1', 'Region_2', 'Region_3', 'Region_4']:
+            meal_name = self.get_meal_display_name(meal_id)
+            
+            print(f"\n   🍽️ {meal_name} (ID: {meal_id}) regional breakdown:")
+            
+            # Check each region for this meal
+            for region in sorted(set(self.regional_mapping.values())):
                 combo_data = self.train_aggregated[
                     (self.train_aggregated['meal_id'] == meal_id) & 
                     (self.train_aggregated['region'] == region)
                 ]
+                
                 if len(combo_data) > 0:
                     combo_weekly = combo_data.groupby('week')['num_orders'].sum().reset_index()
                     weeks_count = len(combo_weekly)
+                    avg_demand = combo_weekly['num_orders'].mean()
                     
-                    if weeks_count >= min_weeks_required:  # Only show viable combinations
+                    if weeks_count >= min_weeks_required:
                         availability[f"meal_{meal_id}_{region}"] = {
                             'weeks': weeks_count,
                             'sufficient': True,
-                            'avg_demand': combo_weekly['num_orders'].mean(),
-                            'description': f"Meal {meal_id} - {region} ({weeks_count} weeks)",
+                            'avg_demand': avg_demand,
+                            'description': f"{meal_name} - {region} ({weeks_count} weeks)",
                             'type': 'meal_region'
                         }
+                        print(f"      ✅ {region}: {weeks_count} weeks, avg demand: {avg_demand:.0f}")
+                    else:
+                        print(f"      ❌ {region}: {weeks_count} weeks (insufficient)")
+                else:
+                    print(f"      ❌ {region}: No data available")
         
         self.data_availability = availability
         
         # Print summary
-        print(f"\n📊 Meal-Specific Forecasting Options:")
-        print(f"{'Option':<25} {'Sufficient':<12} {'Weeks':<8} {'Avg Demand':<12} {'Description'}")
-        print("-" * 85)
-        
-        # Group by type for better display
-        for category in ['meal', 'meal_region']:
-            category_items = [(k, v) for k, v in availability.items() if v.get('type') == category]
-            if category_items:
-                for key, info in sorted(category_items, key=lambda x: x[1]['avg_demand'], reverse=True):
-                    sufficient_icon = "✅" if info['sufficient'] else "❌"
-                    print(f"{key:<25} {sufficient_icon:<12} {info['weeks']:<8} {info['avg_demand']:<12.0f} {info['description']}")
-        
-        # Show summary
-        viable_meals = len([k for k, v in availability.items() if v['sufficient'] and v['type'] == 'meal'])
+        viable_individual_meals = len([k for k, v in availability.items() if v['sufficient'] and v['type'] == 'meal'])
         viable_combinations = len([k for k, v in availability.items() if v['sufficient'] and v['type'] == 'meal_region'])
         
         print(f"\n✅ Meal Forecasting Summary:")
-        print(f"   • Individual meals available: {viable_meals}")
+        print(f"   • Individual meals available: {viable_individual_meals}")
         print(f"   • Meal + region combinations: {viable_combinations}")
         print(f"   • Price regressors available: {'Yes' if self.column_mapping.get('checkout_price') else 'No'}")
         print(f"🎯 Focus: Meal-specific demand for ingredient ordering")
@@ -491,8 +503,173 @@ class FoodDemandForecaster:
         else:
             return "overall"
 
+    def calculate_robust_metrics(self, y_true, y_pred):
+        """Calculate more robust metrics that handle outliers better"""
+        import numpy as np
+        from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+        
+        # Standard metrics
+        mae = mean_absolute_error(y_true, y_pred)
+        rmse = np.sqrt(mean_squared_error(y_true, y_pred))
+        r2 = r2_score(y_true, y_pred)
+        
+        # More robust MAPE calculation with outlier handling
+        def robust_mape(actual, predicted):
+            """Calculate MAPE with outlier protection"""
+            # Avoid division by zero and very small numbers
+            mask = np.abs(actual) > np.percentile(np.abs(actual), 5)  # Remove bottom 5%
+            actual_masked = actual[mask]
+            predicted_masked = predicted[mask]
+            
+            if len(actual_masked) == 0:
+                return 100.0  # If no valid data, return high error
+            
+            # Calculate percentage errors
+            percentage_errors = np.abs((actual_masked - predicted_masked) / actual_masked) * 100
+            
+            # Cap extreme percentage errors at 200% to prevent outliers from dominating
+            percentage_errors = np.minimum(percentage_errors, 200)
+            
+            return np.mean(percentage_errors)
+        
+        # Symmetric MAPE (more robust alternative)
+        def symmetric_mape(actual, predicted):
+            """Calculate symmetric MAPE - less biased than regular MAPE"""
+            denominator = (np.abs(actual) + np.abs(predicted)) / 2
+            mask = denominator > np.percentile(denominator, 5)  # Remove very small denominators
+            
+            if np.sum(mask) == 0:
+                return 100.0
+            
+            actual_masked = actual[mask]
+            predicted_masked = predicted[mask]
+            denominator_masked = denominator[mask]
+            
+            smape = np.mean(np.abs(actual_masked - predicted_masked) / denominator_masked) * 100
+            return np.minimum(smape, 200)  # Cap at 200%
+        
+        # Median-based metrics (more robust to outliers)
+        median_absolute_error = np.median(np.abs(y_true - y_pred))
+        
+        # Calculate different MAPE versions
+        standard_mape = robust_mape(y_true, y_pred)
+        symmetric_mape_val = symmetric_mape(y_true, y_pred)
+        
+        # Bias calculation
+        bias = np.mean(y_pred - y_true)
+        
+        # Alternative accuracy measures
+        accuracy_standard = max(0, 100 - standard_mape)
+        accuracy_symmetric = max(0, 100 - symmetric_mape_val)
+        
+        # Weighted accuracy based on data characteristics
+        data_variance = np.var(y_true)
+        data_mean = np.mean(y_true)
+        cv = (np.sqrt(data_variance) / data_mean) * 100 if data_mean > 0 else 100
+        
+        # If coefficient of variation is high (>50%), use symmetric MAPE
+        if cv > 50:
+            primary_accuracy = accuracy_symmetric
+            primary_mape = symmetric_mape_val
+            accuracy_note = "Using Symmetric MAPE due to high variance"
+        else:
+            primary_accuracy = accuracy_standard
+            primary_mape = standard_mape
+            accuracy_note = "Using standard MAPE"
+        
+        return {
+            'mae': float(mae),
+            'rmse': float(rmse),
+            'r2': float(r2),
+            'mape': float(primary_mape),
+            'mape_standard': float(standard_mape),
+            'mape_symmetric': float(symmetric_mape_val),
+            'median_ae': float(median_absolute_error),
+            'bias': float(bias),
+            'accuracy': float(primary_accuracy),
+            'cv': float(cv),
+            'accuracy_note': accuracy_note
+        }
+
+    def detect_data_characteristics(self, data):
+        """Analyze data to determine optimal Prophet configuration"""
+        if len(data) == 0:
+            return 'medium'
+        
+        # Calculate coefficient of variation
+        mean_val = np.mean(data)
+        std_val = np.std(data)
+        cv = (std_val / mean_val) * 100 if mean_val > 0 else 100
+        
+        # Detect outliers using IQR method
+        Q1 = np.percentile(data, 25)
+        Q3 = np.percentile(data, 75)
+        IQR = Q3 - Q1
+        outlier_threshold = Q3 + 1.5 * IQR
+        outlier_count = np.sum(data > outlier_threshold)
+        outlier_percentage = (outlier_count / len(data)) * 100
+        
+        print(f"📊 Data characteristics analysis:")
+        print(f"   • Coefficient of Variation: {cv:.1f}%")
+        print(f"   • Outliers detected: {outlier_count} ({outlier_percentage:.1f}%)")
+        print(f"   • Data range: {np.min(data):.0f} - {np.max(data):.0f}")
+        
+        # Determine variance level
+        if cv > 60 or outlier_percentage > 10:
+            variance_level = 'high'
+            print(f"   🔺 High variance data detected - using robust configuration")
+        elif cv > 30 or outlier_percentage > 5:
+            variance_level = 'medium'
+            print(f"   📊 Medium variance data - using standard configuration")
+        else:
+            variance_level = 'low'
+            print(f"   📈 Low variance data - using conservative configuration")
+        
+        return variance_level
+
+    def create_robust_prophet_model(self, data_variance_level='medium'):
+        """Create Prophet model with parameters optimized for data characteristics"""
+        
+        if data_variance_level == 'high':
+            # High variance data - more flexible model
+            model = Prophet(
+                yearly_seasonality=True,
+                weekly_seasonality=True,
+                daily_seasonality=False,
+                seasonality_mode='multiplicative',  # Better for high variance
+                changepoint_prior_scale=0.1,  # More flexible changepoints
+                seasonality_prior_scale=0.01,  # Less aggressive seasonality
+                uncertainty_samples=1000,
+                interval_width=0.8  # Narrower intervals for stability
+            )
+            print(f"   🔺 Using HIGH variance Prophet configuration")
+        elif data_variance_level == 'medium':
+            # Standard configuration
+            model = Prophet(
+                yearly_seasonality=True,
+                weekly_seasonality=True,
+                daily_seasonality=False,
+                seasonality_mode='additive',
+                changepoint_prior_scale=0.05,
+                uncertainty_samples=1000
+            )
+            print(f"   📊 Using MEDIUM variance Prophet configuration")
+        else:  # low variance
+            # Conservative model for stable data
+            model = Prophet(
+                yearly_seasonality=True,
+                weekly_seasonality=False,
+                daily_seasonality=False,
+                seasonality_mode='additive',
+                changepoint_prior_scale=0.01,  # Less flexible
+                uncertainty_samples=1000
+            )
+            print(f"   📈 Using LOW variance Prophet configuration")
+        
+        return model
+
     def train_prophet_model(self, region_id=None, meal_id=None):
-        """Train Prophet model for specific meal/region with price regressors"""
+        """Train Prophet model for specific meal/region with adaptive configuration"""
         try:
             # Convert inputs
             if region_id:
@@ -517,9 +694,19 @@ class FoodDemandForecaster:
             if 'meal_id' not in self.train_aggregated.columns:
                 return None, "❌ No meal data available in dataset"
             
+            # Check if meal exists
+            available_meals = set(self.train_aggregated['meal_id'].unique())
+            if meal_id not in available_meals:
+                return None, f"❌ Meal {meal_id} not found. Available meals: {sorted(list(available_meals))[:10]}..."
+            
             filtered_data = self.train_aggregated[self.train_aggregated['meal_id'] == meal_id]
             
             if region_id:
+                # Check if region exists
+                available_regions = set(self.train_aggregated['region'].unique())
+                if region_id not in available_regions:
+                    return None, f"❌ Region {region_id} not found. Available regions: {sorted(list(available_regions))}"
+                
                 filtered_data = filtered_data[filtered_data['region'] == region_id]
                 region_centers = [center for center, region in self.regional_mapping.items() if region == region_id]
                 print(f"📍 {region_id} includes centers: {region_centers}")
@@ -527,8 +714,12 @@ class FoodDemandForecaster:
             print(f"🔍 Debug: Filtered data: {len(filtered_data)} records")
             
             if len(filtered_data) == 0:
-                available_meals = sorted(self.train_aggregated['meal_id'].unique())
-                return None, f"❌ No data found for Meal {meal_id}. Available meals: {available_meals[:10]}..."
+                if region_id:
+                    # Check what regions this meal is available in
+                    meal_regions = self.train_aggregated[self.train_aggregated['meal_id'] == meal_id]['region'].unique()
+                    return None, f"❌ No data found for Meal {meal_id} in {region_id}. Available regions: {' and '.join(sorted(meal_regions))}"
+                else:
+                    return None, f"❌ No data found for Meal {meal_id}"
             
             # Aggregate by week
             demand_data = filtered_data.groupby('week').agg({
@@ -545,7 +736,12 @@ class FoodDemandForecaster:
                 available_weeks = len(demand_data)
                 coverage = available_weeks / len(self.weekly_demand) if len(self.weekly_demand) > 0 else 0
                 
-                suggestion = "Try a different meal or remove region filter"
+                # Provide specific suggestions
+                if region_id:
+                    suggestion = f"Try removing region filter for Meal {meal_id} or select a different region"
+                else:
+                    suggestion = "Try a different meal with more data"
+                
                 return None, f"❌ Insufficient data: only {available_weeks} weeks available ({coverage:.1%} coverage). Need {min_weeks_required}+. {suggestion}"
             
             # Log the actual week range being used
@@ -557,6 +753,10 @@ class FoodDemandForecaster:
             print(f"📊 Training data: {total_weeks} weeks (weeks {min_week}-{max_week})")
             print(f"📈 Coverage: {coverage:.1%} of total timeline")
             print(f"📦 Demand range: {demand_data['num_orders'].min()}-{demand_data['num_orders'].max()}")
+            
+            # NEW: Analyze data characteristics and choose appropriate model
+            demand_values = demand_data['num_orders'].values
+            variance_level = self.detect_data_characteristics(demand_values)
             
             # Prepare data for Prophet with checkout_price regressor
             prophet_data = pd.DataFrame({
@@ -573,15 +773,8 @@ class FoodDemandForecaster:
             
             print(f"💰 Price regressor added: {regressors_added}")
             
-            # Create and configure Prophet model
-            model = Prophet(
-                yearly_seasonality=True,
-                weekly_seasonality=True,
-                daily_seasonality=False,
-                seasonality_mode='additive',  # Better for meal-specific data
-                changepoint_prior_scale=0.05,
-                uncertainty_samples=1000
-            )
+            # NEW: Create adaptive Prophet model based on data characteristics
+            model = self.create_robust_prophet_model(variance_level)
             
             # Add checkout_price regressor
             for regressor in regressors_added:
@@ -598,14 +791,16 @@ class FoodDemandForecaster:
                 'training_weeks': total_weeks,
                 'coverage': coverage,
                 'training_data': prophet_data,  # Store for evaluation
-                'original_data': demand_data     # Store original weekly data
+                'original_data': demand_data,   # Store original weekly data
+                'variance_level': variance_level,  # NEW: Store variance level
+                'data_cv': (np.std(demand_values) / np.mean(demand_values)) * 100  # NEW: Store CV
             }
             
             # Generate predictions on training data for performance visualization
             self._generate_training_performance(model_key, model, prophet_data, demand_data)
             
             print(f"✅ Model stored with key: '{model_key}'")
-            return model, f"✅ Meal-specific model trained for {model_key} with checkout_price regressor"
+            return model, f"✅ Adaptive model trained for {model_key} (variance: {variance_level})"
             
         except Exception as e:
             print(f"❌ Training error: {e}")
@@ -724,7 +919,7 @@ class FoodDemandForecaster:
             if confidence_level != 0.8:
                 print(f"📊 Adjusting confidence intervals to {confidence_level*100}%")
                 
-                from scipy import stats
+                from scipy import stats # type: ignore
                 default_z = stats.norm.ppf(0.9)
                 custom_z = stats.norm.ppf((1 + confidence_level) / 2)
                 scaling_factor = custom_z / default_z
@@ -745,14 +940,15 @@ class FoodDemandForecaster:
                 'regressors_used': regressors
             }
             
-            return forecast, f"✅ Meal-specific forecast generated for Meal {meal_id} with checkout_price regressor ({confidence_level*100}% CI)"
+            meal_name = self.get_meal_display_name(meal_id)
+            return forecast, f"✅ Forecast generated successfully for {meal_name}"
             
         except Exception as e:
             print(f"❌ Forecast error: {e}")
             return None, f"Error generating forecast: {str(e)}"
     
     def evaluate_model_performance(self, model_key):
-        """Evaluate Prophet model performance using train data split"""
+        """Evaluate Prophet model performance using robust metrics for high-variance data"""
         try:
             print(f"🔍 Evaluating model: '{model_key}'")
             print(f"🔍 Available models: {list(self.models.keys())}")
@@ -778,8 +974,10 @@ class FoodDemandForecaster:
             model = model_info['model']
             meal_id = model_info['meal_id']
             region_id = model_info.get('region_id')
+            variance_level = model_info.get('variance_level', 'medium')
+            data_cv = model_info.get('data_cv', 0)
             
-            print(f"🔍 Evaluating model: {model_key}")
+            print(f"🔍 Evaluating model: {model_key} (variance: {variance_level}, CV: {data_cv:.1f}%)")
             
             # Get stored training data
             training_data = model_info.get('training_data')
@@ -821,41 +1019,35 @@ class FoodDemandForecaster:
             print(f"📊 Predictions range: {y_pred.min():.1f} - {y_pred.max():.1f}")
             print(f"📊 Actual range: {y_true.min()} - {y_true.max()}")
             
-            # Calculate performance metrics
-            mae = mean_absolute_error(y_true, y_pred)
-            rmse = np.sqrt(mean_squared_error(y_true, y_pred))
-            mape_values = np.abs((y_true - y_pred) / np.maximum(y_true, 1))
-            mape = np.mean(mape_values) * 100
-            r2 = r2_score(y_true, y_pred)
-            bias = np.mean(y_pred - y_true)
-            accuracy = max(0, 100 - mape)
+            # NEW: Use robust metrics calculation
+            robust_metrics = self.calculate_robust_metrics(y_true, y_pred)
             
+            # Add standard fields for compatibility
             metrics = {
-                'mae': float(mae),
-                'rmse': float(rmse),
-                'r2': float(r2),
-                'mape': float(mape),
-                'bias': float(bias),
-                'accuracy': float(accuracy),
+                **robust_metrics,
                 'test_samples': len(y_true),
                 'predictions_positive': int(np.sum(y_pred > 0)),
                 'total_weeks_used': total_weeks,
                 'evaluation_weeks': f"{eval_min_week}-{eval_max_week}",
                 'meal_id': meal_id,
                 'region_id': region_id,
-                'regressors_used': len(regressors)
+                'regressors_used': len(regressors),
+                'variance_level': variance_level,
+                'data_cv': data_cv
             }
             
-            print(f"✅ Metrics calculated for Meal {meal_id}:")
+            print(f"✅ Robust metrics calculated for Meal {meal_id}:")
+            print(f"   📊 {metrics['accuracy_note']}")
             for key, value in metrics.items():
-                if isinstance(value, (int, float)):
-                    print(f"   {key}: {value:.2f}")
-                else:
-                    print(f"   {key}: {value}")
+                if isinstance(value, (int, float)) and key not in ['accuracy_note']:
+                    if 'mape' in key or 'accuracy' in key or 'cv' in key:
+                        print(f"   {key}: {value:.1f}%")
+                    else:
+                        print(f"   {key}: {value:.2f}")
             
             self.performance_metrics[model_key] = metrics
             
-            return metrics, f"Model evaluation completed for Meal {meal_id} using weeks {eval_min_week}-{eval_max_week}"
+            return metrics, f"Robust model evaluation completed for Meal {meal_id} using weeks {eval_min_week}-{eval_max_week}"
             
         except Exception as e:
             print(f"❌ Evaluation error: {e}")
@@ -870,7 +1062,7 @@ class FoodDemandForecaster:
     def get_model_summary(self):
         """Get summary of all trained models and their performance"""
         # Get actual regions from the regional mapping
-        actual_regions = sorted(set(self.regional_mapping.values())) if self.regional_mapping else ['Region_1', 'Region_2', 'Region_3', 'Region_4']
+        actual_regions = sorted(set(self.regional_mapping.values())) if self.regional_mapping else ['Region-Kassel', 'Region-Lyon', 'Region-Wien', 'Region-Luzern']
         
         # Create meals list with names for frontend
         meals_list = []
@@ -891,7 +1083,7 @@ class FoodDemandForecaster:
                 'test_records': len(self.test_data) if self.test_data is not None else 0,
                 'regions': actual_regions,
                 'meals': [meal['id'] for meal in meals_list],  # Keep backward compatibility
-                'meals_with_names': meals_list,  # NEW: Full meal info
+                'meals_with_names': meals_list,  # Full meal info
                 'weeks_range': [
                     int(self.train_data['week'].min()) if self.train_data is not None else 0,
                     int(self.train_data['week'].max()) if self.train_data is not None else 0
