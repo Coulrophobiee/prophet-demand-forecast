@@ -804,7 +804,7 @@
             }
             
             // Add business summary for short forecasts
-            if (forecastWeeks <= 3) {
+            if (forecastWeeks == 1) {
                 addBusinessSummary();
             } else {
                 removeBusinessSummary();
@@ -936,9 +936,9 @@
                     <div class="business-recommendations">
                         <h4>📊 Key Recommendations:</h4>
                         <ul>
-                            <li><strong>Order ingredients for ${Math.ceil(totalPredicted * 1.1).toLocaleString()} portions</strong> (10% safety buffer included)</li>
-                            <li><strong>Schedule ${Math.ceil(totalPredicted / 50)} total prep hours</strong> across the forecast period</li>
-                            <li><strong>Monitor daily orders</strong> to adjust if trending toward upper/lower bounds</li>
+                            <li><strong> Order ingredients for ${Math.ceil(totalPredicted * 1.1).toLocaleString()} portions</strong> (10% safety buffer included)</li>
+                            <li><strong> Schedule ${Math.ceil(totalPredicted / 50)} total prep hours</strong> across the forecast period</li>
+                            <li><strong> Monitor daily orders</strong> to adjust if trending toward upper/lower bounds</li>
                         </ul>
                     </div>
                 `;
@@ -984,11 +984,10 @@
             } else if (currentMetrics && currentMetrics.meal_name) {
                 mealName = currentMetrics.meal_name;
             } else if (mealId !== 'Unknown') {
-                // Try to find the meal name in the selectors
                 const mealSelect = document.getElementById('mealSelect');
                 const selectedOption = Array.from(mealSelect.options).find(opt => opt.value == mealId);
                 if (selectedOption) {
-                    mealName = selectedOption.textContent.split(' (ID:')[0]; // Extract name part
+                    mealName = selectedOption.textContent.split(' (ID:')[0];
                 } else {
                     mealName = `Meal ${mealId}`;
                 }
@@ -1000,8 +999,8 @@
             let labels, datasets, chartTitle, xAxisTitle;
             
             if (forecastWeeks <= 3) {
-                // For short forecasts, show historical context + forecast
-                const historicalWeeks = Math.min(8, forecastWeeks * 4); // Show 4x the forecast period or max 8 weeks
+                // FIXED: For short forecasts, show historical context + forecast WITH SEAMLESS CONNECTION
+                const historicalWeeks = Math.min(8, forecastWeeks * 4);
                 
                 // Create extended labels showing recent history + forecast
                 const historicalLabels = [];
@@ -1023,58 +1022,83 @@
                     historicalData = recentActual.concat(new Array(Math.max(0, historicalWeeks - recentActual.length)).fill(null));
                 }
                 
-                // Create datasets with historical context
+                // FIXED: Create seamless datasets that connect historical and forecast data
+                // Handle cases where historical data might have nulls
+                const cleanHistoricalData = historicalData.map(val => val === null ? 0 : val);
+                const seamlessData = [...cleanHistoricalData, ...currentForecast.predicted];
+                
+                // FIXED: Confidence intervals should only exist for forecast data
+                // Use null for historical periods, actual values for forecast periods
+                const seamlessUpper = [...new Array(historicalWeeks).fill(null), ...currentForecast.upper];
+                const seamlessLower = [...new Array(historicalWeeks).fill(null), ...currentForecast.lower];
+                
+                // Create point styles and colors arrays for emphasizing forecast points
+                const totalPoints = seamlessData.length;
+                const pointRadii = new Array(historicalWeeks).fill(4).concat(new Array(forecastWeeks).fill(8));
+                const pointColors = new Array(historicalWeeks).fill('#94a3b8').concat(new Array(forecastWeeks).fill('#667eea'));
+                const pointBorderWidths = new Array(historicalWeeks).fill(1).concat(new Array(forecastWeeks).fill(3));
+                
                 datasets = [{
-                    label: `Recent ${mealName} Orders (Historical)`,
-                    data: [...historicalData, ...new Array(forecastWeeks).fill(null)],
-                    borderColor: '#94a3b8', 
-                    backgroundColor: 'rgba(148, 163, 184, 0.1)',
+                    label: `${mealName} Orders (Historical + Forecast)`,
+                    data: seamlessData,
+                    borderColor: '#667eea',
+                    backgroundColor: 'rgba(102, 126, 234, 0.1)',
                     fill: false,
                     tension: 0.3,
-                    pointRadius: 5,
-                    pointHoverRadius: 7,
-                    borderWidth: 2,
-                    borderDash: [0, 0]
-                }, {
-                    label: `${mealName} Forecast`,
-                    data: [...new Array(historicalWeeks).fill(null), ...currentForecast.predicted],
-                    borderColor: '#667eea', 
-                    backgroundColor: 'rgba(102, 126, 234, 0.2)',
-                    fill: false,
-                    tension: 0.3,
-                    pointRadius: 8,
-                    pointHoverRadius: 10,
-                    borderWidth: 4,
-                    pointBackgroundColor: '#667eea',
+                    pointRadius: pointRadii,
+                    pointBackgroundColor: pointColors,
                     pointBorderColor: '#ffffff',
-                    pointBorderWidth: 3
+                    pointBorderWidth: pointBorderWidths,
+                    borderWidth: 3,
+                    // Use segment styling to distinguish historical from forecast
+                    segment: {
+                        borderColor: ctx => {
+                            // If this segment crosses from historical to forecast, use forecast color
+                            if (ctx.p1DataIndex >= historicalWeeks) return '#667eea';
+                            // Otherwise use historical color
+                            return '#94a3b8';
+                        },
+                        borderDash: ctx => {
+                            // Dash the forecast portion
+                            if (ctx.p1DataIndex >= historicalWeeks) return [5, 5];
+                            return [];
+                        }
+                    }
                 }, {
                     label: `Upper Bound (${confidenceLevel}%)`,
-                    data: [...new Array(historicalWeeks).fill(null), ...currentForecast.upper],
-                    borderColor: 'rgba(255, 107, 107, 0.6)', 
+                    data: seamlessUpper,
+                    borderColor: 'rgba(255, 107, 107, 0.6)',
                     backgroundColor: 'rgba(255, 107, 107, 0.1)',
-                    fill: '+1',
+                    fill: '+1', // Fill between this and the next dataset
                     tension: 0.3,
-                    pointRadius: 6,
+                    pointRadius: ctx => ctx.dataIndex >= historicalWeeks ? 6 : 0, // Only show points for forecast
                     pointStyle: 'triangle',
-                    borderWidth: 2
+                    borderWidth: 2,
+                    spanGaps: false, // Don't connect across null values
+                    segment: {
+                        borderDash: ctx => ctx.p1DataIndex >= historicalWeeks ? [3, 3] : undefined
+                    }
                 }, {
                     label: `Lower Bound (${confidenceLevel}%)`,
-                    data: [...new Array(historicalWeeks).fill(null), ...currentForecast.lower],
-                    borderColor: 'rgba(255, 107, 107, 0.6)', 
+                    data: seamlessLower,
+                    borderColor: 'rgba(255, 107, 107, 0.6)',
                     backgroundColor: 'rgba(255, 107, 107, 0.1)',
                     fill: false,
                     tension: 0.3,
-                    pointRadius: 6,
+                    pointRadius: ctx => ctx.dataIndex >= historicalWeeks ? 6 : 0, // Only show points for forecast
                     pointStyle: 'triangle',
-                    borderWidth: 2
+                    borderWidth: 2,
+                    spanGaps: false, // Don't connect across null values
+                    segment: {
+                        borderDash: ctx => ctx.p1DataIndex >= historicalWeeks ? [3, 3] : undefined
+                    }
                 }];
                 
                 chartTitle = `${mealName}: Next ${forecastWeeks} Week${forecastWeeks > 1 ? 's' : ''} Forecast with Recent Context`;
                 xAxisTitle = `Recent History → Future Forecast (${confidenceLevel}% CI)`;
                 
             } else {
-                // For longer forecasts, use original visualization
+                // For longer forecasts, use original visualization (this already works well)
                 labels = currentForecast.weeks.map(w => `Week ${lastTrainWeek + w}`);
                 
                 datasets = [{
