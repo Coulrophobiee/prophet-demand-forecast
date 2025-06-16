@@ -158,11 +158,11 @@ class FoodDemandForecaster:
                     if region_code == 56:
                         final_region = "Region-Kassel"
                     elif region_code == 34:
-                        final_region = "Region-Lyon"  
+                        final_region = "Region-Luzern"  
                     elif region_code == 77:
                         final_region = "Region-Wien"
                     else:  # region_code == 85 or any other
-                        final_region = "Region-Luzern"
+                        final_region = "Region-Lyon"
                     
                     regional_mapping[center_id] = final_region
                 
@@ -1106,3 +1106,208 @@ class FoodDemandForecaster:
             }
         
         return summary
+    
+    def create_naive_baseline_model(self, model_key):
+        """Create a naive baseline model that uses 'same week last year' predictions"""
+        try:
+            if model_key not in self.models:
+                return None, "Prophet model not found for baseline comparison"
+            
+            model_info = self.models[model_key]
+            original_data = model_info.get('original_data')
+            
+            if original_data is None:
+                return None, "No original training data available for baseline"
+            
+            print(f"🔄 Creating naive baseline for {model_key}")
+            
+            # Sort data by week to ensure proper ordering
+            sorted_data = original_data.sort_values('week').reset_index(drop=True)
+            weeks = sorted_data['week'].values
+            demands = sorted_data['num_orders'].values
+            
+            # Calculate weeks per year (assuming roughly 52 weeks)
+            weeks_per_year = 52
+            
+            # Create baseline predictions for evaluation period
+            total_weeks = len(sorted_data)
+            eval_size = max(5, int(total_weeks * 0.2))  # Same as Prophet evaluation
+            eval_start_idx = total_weeks - eval_size
+            
+            baseline_predictions = []
+            baseline_weeks = []
+            
+            print(f"📊 Creating baseline for last {eval_size} weeks")
+            
+            for i in range(eval_start_idx, total_weeks):
+                current_week = weeks[i]
+                
+                # Look for the same week last year (52 weeks ago)
+                target_week = current_week - weeks_per_year
+                
+                # Find the closest available week to target_week
+                week_diffs = np.abs(weeks[:i] - target_week)  # Only look at past data
+                
+                if len(week_diffs) > 0:
+                    closest_idx = np.argmin(week_diffs)
+                    closest_week = weeks[closest_idx]
+                    baseline_pred = demands[closest_idx]
+                    
+                    # If we found a reasonably close match (within 4 weeks of target)
+                    if abs(closest_week - target_week) <= 4:
+                        baseline_predictions.append(baseline_pred)
+                        print(f"   Week {current_week}: Using week {closest_week} demand ({baseline_pred}) [target: {target_week}]")
+                    else:
+                        # Fallback: use recent average if no good historical match
+                        recent_avg = np.mean(demands[max(0, i-12):i])  # Last 12 weeks average
+                        baseline_predictions.append(recent_avg)
+                        print(f"   Week {current_week}: Using recent avg ({recent_avg:.0f}) [no good historical match]")
+                else:
+                    # Fallback for edge cases
+                    baseline_predictions.append(np.mean(demands[:i]) if i > 0 else demands[0])
+                
+                baseline_weeks.append(current_week)
+            
+            # Store baseline model results
+            baseline_model = {
+                'predictions': np.array(baseline_predictions),
+                'weeks': np.array(baseline_weeks),
+                'eval_start_idx': eval_start_idx,
+                'method': 'same_week_last_year',
+                'weeks_per_year': weeks_per_year
+            }
+            
+            self.baseline_models = getattr(self, 'baseline_models', {})
+            self.baseline_models[model_key] = baseline_model
+            
+            print(f"✅ Naive baseline created: {len(baseline_predictions)} predictions")
+            return baseline_model, f"Baseline model created using same-week-last-year approach"
+            
+        except Exception as e:
+            print(f"❌ Error creating baseline model: {e}")
+            return None, f"Error creating baseline: {str(e)}"
+
+    def evaluate_baseline_vs_prophet(self, model_key):
+        """Compare Prophet model performance against naive baseline"""
+        try:
+            if model_key not in self.models:
+                return None, "Prophet model not found"
+            
+            # Create baseline model if it doesn't exist
+            if not hasattr(self, 'baseline_models') or model_key not in self.baseline_models:
+                baseline_model, message = self.create_naive_baseline_model(model_key)
+                if baseline_model is None:
+                    return None, message
+            
+            # Get Prophet evaluation data
+            model_info = self.models[model_key]
+            original_data = model_info.get('original_data')
+            training_data = model_info.get('training_data')
+            
+            if original_data is None or training_data is None:
+                return None, "No evaluation data available"
+            
+            # Get baseline predictions
+            baseline_model = self.baseline_models[model_key]
+            baseline_predictions = baseline_model['predictions']
+            eval_weeks = baseline_model['weeks']
+            
+            # Get Prophet predictions for the same period
+            total_weeks = len(original_data)
+            eval_size = len(baseline_predictions)
+            eval_start_idx = total_weeks - eval_size
+            
+            # Prepare Prophet evaluation data
+            eval_data_prophet = training_data.iloc[eval_start_idx:eval_start_idx + eval_size].copy()
+            eval_data_original = original_data.iloc[eval_start_idx:eval_start_idx + eval_size].copy()
+            
+            # Add regressors for Prophet evaluation
+            regressors = model_info['regressors']
+            for regressor in regressors:
+                if regressor in eval_data_original.columns:
+                    eval_data_prophet[regressor] = eval_data_original[regressor].fillna(eval_data_original[regressor].mean())
+            
+            # Get Prophet predictions
+            prophet_model = model_info['model']
+            prophet_predictions = prophet_model.predict(eval_data_prophet[['ds'] + regressors])
+            prophet_pred_values = np.maximum(prophet_predictions['yhat'].values, 0)
+            
+            # Get actual values
+            actual_values = eval_data_prophet['y'].values
+            
+            print(f"📊 Comparing Prophet vs Baseline for {model_key}")
+            print(f"📅 Evaluation period: {len(actual_values)} weeks")
+            
+            # Calculate metrics for both models
+            def calculate_comparison_metrics(y_true, y_pred, model_name):
+                mae = mean_absolute_error(y_true, y_pred)
+                rmse = np.sqrt(mean_squared_error(y_true, y_pred))
+                
+                # Robust MAPE calculation
+                mask = np.abs(y_true) > np.percentile(np.abs(y_true), 5)
+                if np.sum(mask) > 0:
+                    mape = np.mean(np.abs((y_true[mask] - y_pred[mask]) / y_true[mask])) * 100
+                    mape = min(mape, 200)  # Cap at 200%
+                else:
+                    mape = 100
+                
+                accuracy = max(0, 100 - mape)
+                bias = np.mean(y_pred - y_true)
+                
+                print(f"   📈 {model_name}:")
+                print(f"      MAE: {mae:.1f}, RMSE: {rmse:.1f}, MAPE: {mape:.1f}%, Accuracy: {accuracy:.1f}%")
+                
+                return {
+                    'mae': mae, 'rmse': rmse, 'mape': mape, 
+                    'accuracy': accuracy, 'bias': bias
+                }
+            
+            prophet_metrics = calculate_comparison_metrics(actual_values, prophet_pred_values, "Prophet")
+            baseline_metrics = calculate_comparison_metrics(actual_values, baseline_predictions, "Baseline")
+            
+            # Calculate improvement
+            accuracy_improvement = prophet_metrics['accuracy'] - baseline_metrics['accuracy']
+            mae_improvement = ((baseline_metrics['mae'] - prophet_metrics['mae']) / baseline_metrics['mae']) * 100
+            
+            print(f"🎯 Prophet vs Baseline Performance:")
+            print(f"   Accuracy improvement: {accuracy_improvement:+.1f} percentage points")
+            print(f"   MAE improvement: {mae_improvement:+.1f}%")
+            
+            # Prepare comparison data for visualization
+            comparison_data = {
+                'weeks': [f"Week {int(w)}" for w in eval_weeks],
+                'week_numbers': eval_weeks.tolist(),
+                'actual': actual_values.round().astype(int).tolist(),
+                'prophet_predicted': prophet_pred_values.round().astype(int).tolist(),
+                'baseline_predicted': baseline_predictions.round().astype(int).tolist(),
+                'prophet_upper': prophet_predictions['yhat_upper'].round().astype(int).tolist(),
+                'prophet_lower': prophet_predictions['yhat_lower'].round().astype(int).tolist(),
+                'prophet_metrics': prophet_metrics,
+                'baseline_metrics': baseline_metrics,
+                'accuracy_improvement': accuracy_improvement,
+                'mae_improvement': mae_improvement,
+                'eval_period': f"{int(eval_weeks.min())}-{int(eval_weeks.max())}",
+                'meal_id': model_info.get('meal_id'),
+                'region_id': model_info.get('region_id')
+            }
+            
+            # Store comparison for later retrieval
+            self.model_comparisons = getattr(self, 'model_comparisons', {})
+            self.model_comparisons[model_key] = comparison_data
+            
+            return comparison_data, f"Model comparison completed for evaluation period {comparison_data['eval_period']}"
+            
+        except Exception as e:
+            print(f"❌ Error in baseline comparison: {e}")
+            import traceback
+            traceback.print_exc()
+            return None, f"Error comparing models: {str(e)}"
+
+    def get_model_comparison(self, model_key):
+        """Get stored model comparison data"""
+        if not hasattr(self, 'model_comparisons') or model_key not in self.model_comparisons:
+            # Generate comparison if it doesn't exist
+            comparison_data, message = self.evaluate_baseline_vs_prophet(model_key)
+            return comparison_data
+        
+        return self.model_comparisons.get(model_key, None)

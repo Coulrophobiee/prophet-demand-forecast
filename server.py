@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Web Server for Prophet Food Demand Forecasting Dashboard
-Fixed version with proper model key handling
+Production version with model comparison functionality
 """
 
 import http.server
@@ -31,6 +31,8 @@ class ForecastingHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_evaluate(parsed_path.query)
         elif parsed_path.path == '/api/training_performance':
             self.handle_training_performance(parsed_path.query)
+        elif parsed_path.path == '/api/model_comparison':
+            self.handle_model_comparison(parsed_path.query)
         elif parsed_path.path == '/api/data_availability':
             self.handle_data_availability()
         elif parsed_path.path == '/api/summary':
@@ -203,6 +205,44 @@ class ForecastingHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
         
         self.send_json_response(response)
     
+    def handle_model_comparison(self, query):
+        """Handle model comparison API endpoint"""
+        params = parse_qs(query)
+        model_key = params.get('model', ['overall'])[0]
+        
+        print(f"🥊 Model comparison request for: '{model_key}'")
+        print(f"🔍 Available models: {list(forecaster.models.keys())}")
+        
+        try:
+            # Generate comparison data
+            comparison_data, message = forecaster.evaluate_baseline_vs_prophet(model_key)
+            
+            if comparison_data:
+                response = {
+                    'success': True,
+                    'message': message,
+                    'comparison': comparison_data
+                }
+                print(f"✅ Model comparison generated successfully")
+                print(f"📊 Prophet accuracy: {comparison_data['prophet_metrics']['accuracy']:.1f}%")
+                print(f"📊 Baseline accuracy: {comparison_data['baseline_metrics']['accuracy']:.1f}%")
+                print(f"📈 Improvement: {comparison_data['accuracy_improvement']:+.1f} percentage points")
+            else:
+                response = {
+                    'success': False,
+                    'message': message
+                }
+                print(f"❌ Model comparison failed: {message}")
+                
+        except Exception as e:
+            print(f"❌ Model comparison error: {e}")
+            response = {
+                'success': False,
+                'message': f"Error generating model comparison: {str(e)}"
+            }
+        
+        self.send_json_response(response)
+    
     def handle_data_availability(self):
         """Handle data availability request"""
         availability = forecaster.get_data_availability()
@@ -284,6 +324,7 @@ def start_server(port=8000):
             print(f"📊 Open your browser and go to: http://localhost:{port}")
             print(f"🗺️ Features: Regional analysis, Prophet training, model evaluation")
             print(f"🎯 Performance metrics: Prophet accuracy, MAE, RMSE, R² scores")
+            print(f"🥊 NEW: Prophet vs Baseline model comparison")
             print(f"🛑 Press Ctrl+C to stop the server")
             print("-" * 60)
             
@@ -305,11 +346,18 @@ def start_server(port=8000):
 
 if __name__ == "__main__":
     print("🧠 Facebook Prophet Food Demand Forecasting")
-    print("🗺️ Regional Analysis Version with Data Availability Analysis")
+    print("🗺️ Regional Analysis Version with Model Comparison")
     print("=" * 60)
     print("📋 Requirements:")
     print("   - pip install prophet pandas numpy scikit-learn scipy")
     print("   - train.csv and test.csv in current directory")
     print("   - dashboard.html in current directory")
+    print("   - forecaster.py in current directory")
+    print("=" * 60)
+    print("🆕 New Features:")
+    print("   - Prophet vs Baseline model comparison")
+    print("   - 'Same week last year' naive baseline")
+    print("   - Side-by-side performance evaluation")
+    print("   - Visual comparison charts")
     print("=" * 60)
     start_server()

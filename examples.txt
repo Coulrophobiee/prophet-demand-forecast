@@ -1,2 +1,3 @@
 1. Beef Burgers (ID:1438) - Region Kassel
 2. Chef's Signature Pasta (ID: 1902) - Region Kassel & Luzern
+3. Beef Goulash (ID:1062) - Region Kassel
