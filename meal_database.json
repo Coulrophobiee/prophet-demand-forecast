@@ -30,7 +30,14 @@
       false
     ],
     "type": "Vegetarian",
-    "price_tier": "Budget"
+    "price_tier": "Budget",
+    "storage_m3": [
+      0.005,
+      0.008,
+      0.0005,
+      0.0001,
+      0.0006
+    ]
   },
   "1993": {
     "name": "Simple Spinach and Chickpea Curry",
@@ -63,7 +70,14 @@
       true
     ],
     "type": "Vegetarian",
-    "price_tier": "Budget"
+    "price_tier": "Budget",
+    "storage_m3": [
+      0.002,
+      0.009,
+      0.0003,
+      0.004,
+      0.002
+    ]
   },
   "2539": {
     "name": "Basic Tofu Stir Fry",
@@ -96,7 +110,14 @@
       false
     ],
     "type": "Vegetarian",
-    "price_tier": "Budget"
+    "price_tier": "Budget",
+    "storage_m3": [
+      0.003,
+      0.008,
+      0.0003,
+      0.004,
+      0.0002
+    ]
   },
   "1248": {
     "name": "Simple Swedish Meatballs",
@@ -129,7 +150,14 @@
       true
     ],
     "type": "Meat",
-    "price_tier": "Budget"
+    "price_tier": "Budget",
+    "storage_m3": [
+      0.003,
+      0.0004,
+      0.0005,
+      0.004,
+      0.005
+    ]
   },
   "2631": {
     "name": "Basic Grilled Fish",
@@ -162,7 +190,14 @@
       true
     ],
     "type": "Fish",
-    "price_tier": "Budget"
+    "price_tier": "Budget",
+    "storage_m3": [
+      0.004,
+      0.0002,
+      0.005,
+      0.005,
+      0.0002
+    ]
   },
   "1311": {
     "name": "Fish Tacos",
@@ -195,7 +230,14 @@
       true
     ],
     "type": "Fish",
-    "price_tier": "Standard"
+    "price_tier": "Standard",
+    "storage_m3": [
+      0.003,
+      0.0025,
+      0.006,
+      0.0007,
+      0.0006
+    ]
   },
   "1062": {
     "name": "Beef Goulash",
@@ -228,7 +270,14 @@
       true
     ],
     "type": "Meat",
-    "price_tier": "Standard"
+    "price_tier": "Standard",
+    "storage_m3": [
+      0.004,
+      0.0015,
+      0.004,
+      0.005,
+      0.0007
+    ]
   },
   "1778": {
     "name": "Chicken Curry",
@@ -261,7 +310,14 @@
       true
     ],
     "type": "Meat",
-    "price_tier": "Standard"
+    "price_tier": "Standard",
+    "storage_m3": [
+      0.004,
+      0.0015,
+      0.004,
+      0.0025,
+      0.0003
+    ]
   },
   "1803": {
     "name": "Vegetable Grain Bowl",
@@ -294,7 +350,14 @@
       false
     ],
     "type": "Vegetarian",
-    "price_tier": "Standard"
+    "price_tier": "Standard",
+    "storage_m3": [
+      0.0075,
+      0.003,
+      0.0007,
+      0.0004,
+      0.0001
+    ]
   },
   "1198": {
     "name": "Vegetable Stir Fry",
@@ -327,7 +390,14 @@
       false
     ],
     "type": "Vegetarian",
-    "price_tier": "Standard"
+    "price_tier": "Standard",
+    "storage_m3": [
+      0.01,
+      0.002,
+      0.0006,
+      0.003,
+      0.0001
+    ]
   },
   "2707": {
     "name": "Seafood Rice",
@@ -360,7 +430,14 @@
       true
     ],
     "type": "Fish",
-    "price_tier": "Premium"
+    "price_tier": "Premium",
+    "storage_m3": [
+      0.004,
+      0.004,
+      0.00001,
+      0.005,
+      0.0005
+    ]
   },
   "1847": {
     "name": "Chili Con Carne",
@@ -393,7 +470,14 @@
       true
     ],
     "type": "Meat",
-    "price_tier": "Premium"
+    "price_tier": "Premium",
+    "storage_m3": [
+      0.003,
+      0.002,
+      0.0006,
+      0.004,
+      0.0008
+    ]
   },
   "1438": {
     "name": "Beef Burgers",
@@ -426,7 +510,14 @@
       true
     ],
     "type": "Meat",
-    "price_tier": "Premium"
+    "price_tier": "Premium",
+    "storage_m3": [
+      0.004,
+      0.005,
+      0.004,
+      0.0007,
+      0.0003
+    ]
   },
   "2494": {
     "name": "Roast Chicken Dinner",
@@ -459,7 +550,14 @@
       true
     ],
     "type": "Meat",
-    "price_tier": "Premium"
+    "price_tier": "Premium",
+    "storage_m3": [
+      0.009,
+      0.004,
+      0.008,
+      0.0006,
+      0.001
+    ]
   },
   "2760": {
     "name": "Chicken Schnitzel",
@@ -492,7 +590,14 @@
       true
     ],
     "type": "Meat",
-    "price_tier": "Premium"
+    "price_tier": "Premium",
+    "storage_m3": [
+      0.005,
+      0.004,
+      0.007,
+      0.0005,
+      0.0006
+    ]
   },
   "1109": {
     "name": "Wild Mushroom Risotto",
@@ -525,7 +630,14 @@
       false
     ],
     "type": "Vegetarian",
-    "price_tier": "Executive"
+    "price_tier": "Executive",
+    "storage_m3": [
+      0.004,
+      0.006,
+      0.0004,
+      0.0007,
+      0.0001
+    ]
   },
   "2290": {
     "name": "Beef Stroganoff",
@@ -558,7 +670,14 @@
       false
     ],
     "type": "Meat",
-    "price_tier": "Executive"
+    "price_tier": "Executive",
+    "storage_m3": [
+      0.004,
+      0.0015,
+      0.003,
+      0.005,
+      0.0001
+    ]
   },
   "1525": {
     "name": "Chicken Parmesan",
@@ -591,7 +710,14 @@
       true
     ],
     "type": "Meat",
-    "price_tier": "Executive"
+    "price_tier": "Executive",
+    "storage_m3": [
+      0.005,
+      0.0015,
+      0.001,
+      0.003,
+      0.0004
+    ]
   },
   "2704": {
     "name": "Gourmet Vegetable Frittata",
@@ -624,7 +750,14 @@
       true
     ],
     "type": "Vegetarian",
-    "price_tier": "Executive"
+    "price_tier": "Executive",
+    "storage_m3": [
+      0.003,
+      0.008,
+      0.0007,
+      0.0005,
+      0.007
+    ]
   },
   "1878": {
     "name": "Beef and Broccoli",
@@ -657,7 +790,14 @@
       false
     ],
     "type": "Meat",
-    "price_tier": "Executive"
+    "price_tier": "Executive",
+    "storage_m3": [
+      0.004,
+      0.009,
+      0.0004,
+      0.004,
+      0.0001
+    ]
   },
   "2640": {
     "name": "Tuna Nicoise Salad",
@@ -690,7 +830,14 @@
       true
     ],
     "type": "Fish",
-    "price_tier": "Executive"
+    "price_tier": "Executive",
+    "storage_m3": [
+      0.003,
+      0.002,
+      0.005,
+      0.003,
+      0.0004
+    ]
   },
   "2577": {
     "name": "Chicken Noodle Soup",
@@ -723,7 +870,14 @@
       true
     ],
     "type": "Meat",
-    "price_tier": "Executive"
+    "price_tier": "Executive",
+    "storage_m3": [
+      0.004,
+      0.002,
+      0.007,
+      0.003,
+      0.0005
+    ]
   },
   "1754": {
     "name": "BBQ Chicken Platter",
@@ -756,7 +910,14 @@
       true
     ],
     "type": "Meat",
-    "price_tier": "Executive"
+    "price_tier": "Executive",
+    "storage_m3": [
+      0.0075,
+      0.0006,
+      0.003,
+      0.003,
+      0.0008
+    ]
   },
   "1971": {
     "name": "Gourmet Grain Bowl",
@@ -789,7 +950,14 @@
       true
     ],
     "type": "Vegetarian",
-    "price_tier": "Executive"
+    "price_tier": "Executive",
+    "storage_m3": [
+      0.002,
+      0.003,
+      0.0006,
+      0.003,
+      0.0004
+    ]
   },
   "2306": {
     "name": "Chicken and Rice Casserole",
@@ -822,7 +990,14 @@
       true
     ],
     "type": "Meat",
-    "price_tier": "Executive"
+    "price_tier": "Executive",
+    "storage_m3": [
+      0.005,
+      0.004,
+      0.0015,
+      0.008,
+      0.0004
+    ]
   },
   "2826": {
     "name": "Slow-Cooked Beef Ragu",
@@ -855,7 +1030,14 @@
       true
     ],
     "type": "Meat",
-    "price_tier": "Specialty"
+    "price_tier": "Specialty",
+    "storage_m3": [
+      0.005,
+      0.0025,
+      0.004,
+      0.0007,
+      0.0005
+    ]
   },
   "2139": {
     "name": "Mediterranean Vegetable Stew",
@@ -888,7 +1070,14 @@
       true
     ],
     "type": "Vegetarian",
-    "price_tier": "Specialty"
+    "price_tier": "Specialty",
+    "storage_m3": [
+      0.015,
+      0.0003,
+      0.0002,
+      0.004,
+      0.0007
+    ]
   },
   "1230": {
     "name": "Teriyaki Salmon Bowl",
@@ -921,7 +1110,14 @@
       false
     ],
     "type": "Fish",
-    "price_tier": "Specialty"
+    "price_tier": "Specialty",
+    "storage_m3": [
+      0.004,
+      0.0007,
+      0.004,
+      0.005,
+      0.0001
+    ]
   },
   "1207": {
     "name": "Authentic Carbonara",
@@ -954,7 +1150,14 @@
       false
     ],
     "type": "Meat",
-    "price_tier": "Specialty"
+    "price_tier": "Specialty",
+    "storage_m3": [
+      0.004,
+      0.002,
+      0.0015,
+      0.0008,
+      0.00005
+    ]
   },
   "2322": {
     "name": "Gourmet Beef Enchiladas",
@@ -987,7 +1190,14 @@
       true
     ],
     "type": "Meat",
-    "price_tier": "Specialty"
+    "price_tier": "Specialty",
+    "storage_m3": [
+      0.004,
+      0.0025,
+      0.0015,
+      0.001,
+      0.0006
+    ]
   },
   "2492": {
     "name": "Mediterranean Mezze Platter",
@@ -1020,7 +1230,14 @@
       true
     ],
     "type": "Vegetarian",
-    "price_tier": "Premium Restaurant"
+    "price_tier": "Premium Restaurant",
+    "storage_m3": [
+      0.003,
+      0.0015,
+      0.003,
+      0.01,
+      0.001
+    ]
   },
   "1216": {
     "name": "Gourmet Curry Selection",
@@ -1053,7 +1270,14 @@
       true
     ],
     "type": "Vegetarian",
-    "price_tier": "Premium Restaurant"
+    "price_tier": "Premium Restaurant",
+    "storage_m3": [
+      0.012,
+      0.0004,
+      0.004,
+      0.003,
+      0.0005
+    ]
   },
   "1727": {
     "name": "Scampi Linguine",
@@ -1086,7 +1310,14 @@
       true
     ],
     "type": "Fish",
-    "price_tier": "Premium Restaurant"
+    "price_tier": "Premium Restaurant",
+    "storage_m3": [
+      0.005,
+      0.0015,
+      0.004,
+      0.002,
+      0.0005
+    ]
   },
   "1902": {
     "name": "Chef's Signature Pasta",
@@ -1119,7 +1350,14 @@
       false
     ],
     "type": "Vegetarian",
-    "price_tier": "Premium Restaurant"
+    "price_tier": "Premium Restaurant",
+    "storage_m3": [
+      0.005,
+      0.0025,
+      0.001,
+      0.0008,
+      0.0002
+    ]
   },
   "1247": {
     "name": "Gourmet Chicken Alfredo",
@@ -1152,7 +1390,14 @@
       true
     ],
     "type": "Meat",
-    "price_tier": "Premium Restaurant"
+    "price_tier": "Premium Restaurant",
+    "storage_m3": [
+      0.005,
+      0.004,
+      0.0015,
+      0.006,
+      0.0005
+    ]
   },
   "2304": {
     "name": "Signature Pesto Pasta",
@@ -1185,7 +1430,14 @@
       true
     ],
     "type": "Vegetarian",
-    "price_tier": "Premium Restaurant"
+    "price_tier": "Premium Restaurant",
+    "storage_m3": [
+      0.004,
+      0.0007,
+      0.004,
+      0.0005,
+      0.0008
+    ]
   },
   "1543": {
     "name": "Prime Beef Tacos",
@@ -1218,7 +1470,14 @@
       true
     ],
     "type": "Meat",
-    "price_tier": "Premium Restaurant"
+    "price_tier": "Premium Restaurant",
+    "storage_m3": [
+      0.004,
+      0.0025,
+      0.002,
+      0.0008,
+      0.0006
+    ]
   },
   "1770": {
     "name": "Heritage Pork Stir Fry",
@@ -1251,7 +1510,14 @@
       false
     ],
     "type": "Meat",
-    "price_tier": "Premium Restaurant"
+    "price_tier": "Premium Restaurant",
+    "storage_m3": [
+      0.004,
+      0.01,
+      0.0006,
+      0.003,
+      0.0001
+    ]
   },
   "2126": {
     "name": "Deluxe Fish Curry",
@@ -1284,7 +1550,14 @@
       true
     ],
     "type": "Fish",
-    "price_tier": "Premium Restaurant"
+    "price_tier": "Premium Restaurant",
+    "storage_m3": [
+      0.004,
+      0.0015,
+      0.004,
+      0.006,
+      0.0005
+    ]
   },
   "1558": {
     "name": "Artisanal Vegetable Lasagna",
@@ -1317,7 +1590,14 @@
       true
     ],
     "type": "Vegetarian",
-    "price_tier": "Fine Dining"
+    "price_tier": "Fine Dining",
+    "storage_m3": [
+      0.004,
+      0.012,
+      0.0015,
+      0.0015,
+      0.001
+    ]
   },
   "2581": {
     "name": "Chef's Signature Soup",
@@ -1350,7 +1630,14 @@
       true
     ],
     "type": "Vegetarian",
-    "price_tier": "Fine Dining"
+    "price_tier": "Fine Dining",
+    "storage_m3": [
+      0.003,
+      0.01,
+      0.004,
+      0.0006,
+      0.003
+    ]
   },
   "1962": {
     "name": "Slow-Braised Chicken",
@@ -1383,7 +1670,14 @@
       true
     ],
     "type": "Meat",
-    "price_tier": "Fine Dining"
+    "price_tier": "Fine Dining",
+    "storage_m3": [
+      0.009,
+      0.01,
+      0.003,
+      0.002,
+      0.0002
+    ]
   },
   "2444": {
     "name": "Signature Sweet & Sour",
@@ -1416,7 +1710,14 @@
       false
     ],
     "type": "Meat",
-    "price_tier": "Fine Dining"
+    "price_tier": "Fine Dining",
+    "storage_m3": [
+      0.006,
+      0.0015,
+      0.008,
+      0.004,
+      0.004
+    ]
   },
   "2867": {
     "name": "Gourmet Stuffed Peppers",
@@ -1449,7 +1750,14 @@
       true
     ],
     "type": "Vegetarian",
-    "price_tier": "Fine Dining"
+    "price_tier": "Fine Dining",
+    "storage_m3": [
+      0.012,
+      0.004,
+      0.0015,
+      0.001,
+      0.0005
+    ]
   },
   "1445": {
     "name": "Chef's Quiche",
@@ -1482,6 +1790,13 @@
       false
     ],
     "type": "Vegetarian",
-    "price_tier": "Fine Dining"
+    "price_tier": "Fine Dining",
+    "storage_m3": [
+      0.003,
+      0.003,
+      0.008,
+      0.001,
+      0.0001
+    ]
   }
 }
