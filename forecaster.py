@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Food Demand Forecaster - Prophet Model Implementation
-Enhanced version with robust regional mapping and better error handling
+Food Demand Forecaster - Prophet Model Implementation with Business Cost Analysis
+Enhanced version with Euro-based cost evaluation for business impact assessment
 """
 
 import pandas as pd # type: ignore
@@ -10,6 +10,7 @@ from prophet import Prophet # type: ignore
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score # type: ignore
 import warnings
 import os
+import json
 
 warnings.filterwarnings('ignore')
 
@@ -28,36 +29,178 @@ class FoodDemandForecaster:
         self.data_availability = {}
         self.meal_price_data = {}
         self.meal_names = {}  # Store meal names database
+        self.meal_database = {}  # Store meal ingredients and costs
+        self.business_costs = {}  # Store business cost analysis
         
+    def generate_meal_database(self):
+        """Generate AI-like meal database with ingredients and cost structure"""
+        print("🍽️ Generating meal database with ingredients and cost structure...")
+        
+        # Define ingredient categories
+        perishable_ingredients = [
+            {'name': 'Fresh Chicken Breast', 'cost_percentage': 35, 'kg_per_portion': 0.15, 'perishable': True},
+            {'name': 'Fresh Salmon Fillet', 'cost_percentage': 45, 'kg_per_portion': 0.12, 'perishable': True},
+            {'name': 'Fresh Vegetables Mix', 'cost_percentage': 20, 'kg_per_portion': 0.20, 'perishable': True},
+            {'name': 'Fresh Herbs', 'cost_percentage': 8, 'kg_per_portion': 0.02, 'perishable': True},
+            {'name': 'Fresh Dairy Cream', 'cost_percentage': 15, 'kg_per_portion': 0.05, 'perishable': True},
+            {'name': 'Fresh Mushrooms', 'cost_percentage': 12, 'kg_per_portion': 0.08, 'perishable': True},
+            {'name': 'Fresh Tomatoes', 'cost_percentage': 10, 'kg_per_portion': 0.10, 'perishable': True},
+            {'name': 'Fresh Lettuce', 'cost_percentage': 6, 'kg_per_portion': 0.05, 'perishable': True}
+        ]
+        
+        non_perishable_ingredients = [
+            {'name': 'Rice', 'cost_percentage': 15, 'kg_per_portion': 0.08, 'perishable': False},
+            {'name': 'Pasta', 'cost_percentage': 12, 'kg_per_portion': 0.09, 'perishable': False},
+            {'name': 'Olive Oil', 'cost_percentage': 8, 'kg_per_portion': 0.01, 'perishable': False},
+            {'name': 'Spices Mix', 'cost_percentage': 5, 'kg_per_portion': 0.005, 'perishable': False},
+            {'name': 'Canned Tomatoes', 'cost_percentage': 10, 'kg_per_portion': 0.12, 'perishable': False},
+            {'name': 'Quinoa', 'cost_percentage': 18, 'kg_per_portion': 0.06, 'perishable': False},
+            {'name': 'Dried Beans', 'cost_percentage': 8, 'kg_per_portion': 0.07, 'perishable': False},
+            {'name': 'Flour', 'cost_percentage': 6, 'kg_per_portion': 0.05, 'perishable': False},
+            {'name': 'Coconut Milk', 'cost_percentage': 12, 'kg_per_portion': 0.04, 'perishable': False}
+        ]
+        
+        all_ingredients = perishable_ingredients + non_perishable_ingredients
+        
+        # Generate meals from existing meal IDs in the dataset
+        if self.train_data is not None and 'meal_id' in self.train_data.columns:
+            unique_meals = sorted(self.train_data['meal_id'].unique())
+            
+            for meal_id in unique_meals:
+                # Generate 5 random ingredients for each meal
+                selected_ingredients = random.sample(all_ingredients, 5)
+                
+                # Normalize cost percentages to sum to 100%
+                total_percentage = sum(ing['cost_percentage'] for ing in selected_ingredients)
+                normalized_ingredients = []
+                
+                for ing in selected_ingredients:
+                    normalized_ing = ing.copy()
+                    normalized_ing['cost_percentage'] = (ing['cost_percentage'] / total_percentage) * 100
+                    normalized_ingredients.append(normalized_ing)
+                
+                # Calculate perishable and non-perishable percentages
+                perishable_percentage = sum(ing['cost_percentage'] for ing in normalized_ingredients if ing['perishable'])
+                non_perishable_percentage = sum(ing['cost_percentage'] for ing in normalized_ingredients if not ing['perishable'])
+                total_kg_per_portion = sum(ing['kg_per_portion'] for ing in normalized_ingredients)
+                
+                # Generate meal name if not available
+                meal_name = self.get_meal_display_name(meal_id)
+                if meal_name == f"Meal {meal_id}":
+                    # Generate a more descriptive name based on main ingredients
+                    main_protein = next((ing['name'] for ing in normalized_ingredients if 'Chicken' in ing['name'] or 'Salmon' in ing['name']), 'Protein')
+                    main_carb = next((ing['name'] for ing in normalized_ingredients if ing['name'] in ['Rice', 'Pasta', 'Quinoa']), 'Rice')
+                    meal_name = f"{main_protein.replace('Fresh ', '')} with {main_carb}"
+                
+                # Store with both string and int keys for compatibility
+                meal_data = {
+                    'name': meal_name,
+                    'ingredients': normalized_ingredients,
+                    'total_kg_per_portion': total_kg_per_portion,
+                    'perishable_percentage': perishable_percentage,
+                    'non_perishable_percentage': non_perishable_percentage
+                }
+                
+                # Store with multiple key formats for robustness
+                self.meal_database[str(meal_id)] = meal_data
+                self.meal_database[int(meal_id)] = meal_data
+                self.meal_database[meal_id] = meal_data
+            
+            print(f"✅ Generated meal database for {len(unique_meals)} meals")
+            print(f"📊 Average ingredients per meal: 5")
+            print(f"🥗 Perishable ingredients: {len(perishable_ingredients)}")
+            print(f"🍚 Non-perishable ingredients: {len(non_perishable_ingredients)}")
+            
+            # Debug: Print a few examples
+            sample_ids = list(unique_meals)[:3]
+            for sample_id in sample_ids:
+                sample_data = self.meal_database[sample_id]
+                print(f"   • Meal {sample_id}: {sample_data['perishable_percentage']:.1f}% perishable, {sample_data['total_kg_per_portion']:.2f}kg/portion")
+            
+            # Save meal database to JSON file for persistence
+            try:
+                # Convert keys to strings for JSON compatibility
+                json_compatible_db = {}
+                for meal_id in unique_meals:
+                    json_compatible_db[str(meal_id)] = self.meal_database[meal_id]
+                
+                with open('meal_database.json', 'w', encoding='utf-8') as f:
+                    json.dump(json_compatible_db, f, indent=2, ensure_ascii=False)
+                print(f"💾 Saved meal database to meal_database.json")
+            except Exception as e:
+                print(f"⚠️ Could not save meal database: {e}")
+                
+        else:
+            print("❌ No meal data available for database generation")
+    
     def load_meal_names(self):
-        """Load meal names from JSON file"""
+        """Load meal names and data from existing JSON file"""
         try:
             if os.path.exists('meal_database.json'):
-                import json
                 with open('meal_database.json', 'r', encoding='utf-8') as f:
-                    meal_database = json.load(f)
+                    raw_meal_data = json.load(f)
                 
-                # Convert to simple ID -> name mapping
+                # Process the existing meal database format
+                self.meal_database = {}
                 self.meal_names = {}
-                for meal_id, meal_info in meal_database.items():
-                    self.meal_names[int(meal_id)] = meal_info.get('name', f'Meal {meal_id}')
                 
-                print(f"🍽️ Loaded {len(self.meal_names)} meal names from meal_database.json")
+                for meal_id_str, meal_info in raw_meal_data.items():
+                    meal_id = int(meal_id_str)
+                    meal_name = meal_info.get('name', f'Meal {meal_id}')
+                    
+                    # Calculate perishable percentage from price_distribution and perishable arrays
+                    price_dist = meal_info.get('price_distribution', [])
+                    perishable_flags = meal_info.get('perishable', [])
+                    
+                    perishable_percentage = 0.0
+                    if len(price_dist) == len(perishable_flags):
+                        for i, is_perishable in enumerate(perishable_flags):
+                            if is_perishable and i < len(price_dist):
+                                perishable_percentage += price_dist[i]
+                    
+                    # Calculate total kg per portion from kg_per_10_persons
+                    kg_per_10 = meal_info.get('kg_per_10_persons', [])
+                    total_kg_per_portion = sum(kg_per_10) / 10.0 if kg_per_10 else 0.5
+                    
+                    # Store processed meal data with multiple key formats
+                    processed_meal_data = {
+                        'name': meal_name,
+                        'ingredients': meal_info.get('ingredients', []),
+                        'perishable_percentage': perishable_percentage,
+                        'non_perishable_percentage': 100.0 - perishable_percentage,
+                        'total_kg_per_portion': total_kg_per_portion,
+                        'type': meal_info.get('type', 'Unknown'),
+                        'price_tier': meal_info.get('price_tier', 'Standard'),
+                        'original_data': meal_info  # Keep original for reference
+                    }
+                    
+                    # Store with multiple key formats for robustness
+                    self.meal_database[str(meal_id)] = processed_meal_data
+                    self.meal_database[int(meal_id)] = processed_meal_data
+                    self.meal_database[meal_id] = processed_meal_data
+                    
+                    # Store meal name
+                    self.meal_names[meal_id] = meal_name
+                
+                print(f"🍽️ Loaded {len(self.meal_names)} meals from existing meal_database.json")
+                print(f"📊 Processed meal data with perishable percentages and portion weights")
                 
                 # Show some examples
                 sample_meals = list(self.meal_names.items())[:3]
                 for meal_id, name in sample_meals:
+                    meal_data = self.meal_database[meal_id]
                     print(f"   • {meal_id}: {name}")
+                    print(f"     └ {meal_data['perishable_percentage']:.1f}% perishable, {meal_data['total_kg_per_portion']:.2f}kg/portion, {meal_data['type']}")
                 if len(self.meal_names) > 3:
                     print(f"   • ... and {len(self.meal_names) - 3} more")
-                    
-            else:
-                print("ℹ️ meal_database.json not found - using meal IDs only")
-                self.meal_names = {}
                 
         except Exception as e:
-            print(f"❌ Error loading meal names: {e}")
+            print(f"❌ Error loading meal database: {e}")
+            print(f"🔄 Falling back to generated meal database")
             self.meal_names = {}
+            self.meal_database = {}
+            if self.train_data is not None:
+                self.generate_meal_database()
     
     def get_meal_display_name(self, meal_id):
         """Get display name for a meal (name if available, otherwise ID)"""
@@ -67,10 +210,426 @@ class FoodDemandForecaster:
         except:
             return f"Meal {meal_id}"
         
+    def calculate_business_cost(self, actual_orders, predicted_orders, meal_id, avg_meal_price=15.0):
+        """
+        Calculate business costs for given actual vs predicted orders
+        
+        Parameters:
+        - actual_orders: actual number of orders
+        - predicted_orders: predicted number of orders  
+        - meal_id: meal identifier
+        - avg_meal_price: average price per meal in Euro
+        
+        Returns:
+        - Dictionary with detailed cost breakdown
+        """
+        try:
+            # Cost parameters (as percentages of revenue)
+            INGREDIENT_COST_RATE = 0.40  # 40% of revenue
+            STORAGE_COST_RATE = 0.15     # 15% of revenue
+            EMERGENCY_COST_RATE = 0.60   # 60% of revenue (150% of normal 40%)
+            
+            # Get meal information with proper key handling
+            meal_info = None
+            for key_variant in [str(meal_id), int(meal_id), meal_id]:
+                if key_variant in self.meal_database:
+                    meal_info = self.meal_database[key_variant]
+                    break
+            
+            if not meal_info:
+                # Default cost structure if meal not in database
+                perishable_percentage = 60.0  # Assume 60% perishable by default
+                total_kg_per_portion = 0.5    # Assume 500g per portion
+                meal_name = f"Meal {meal_id}"
+                meal_type = "Unknown"
+                print(f"⚠️ Meal {meal_id} not found in database - using default cost structure (60% perishable)")
+            else:
+                perishable_percentage = meal_info.get('perishable_percentage', 60.0)
+                total_kg_per_portion = meal_info.get('total_kg_per_portion', 0.5)
+                meal_name = meal_info.get('name', f"Meal {meal_id}")
+                meal_type = meal_info.get('type', 'Unknown')
+                print(f"✅ Using meal-specific cost structure for {meal_name}:")
+                print(f"   • {perishable_percentage:.1f}% perishable ingredients")
+                print(f"   • {total_kg_per_portion:.2f}kg per portion")
+                print(f"   • Type: {meal_type}")
+            
+            # Calculate base costs per order
+            ingredient_cost_per_order = avg_meal_price * INGREDIENT_COST_RATE
+            storage_cost_per_order = avg_meal_price * STORAGE_COST_RATE
+            
+            # Calculate prediction difference
+            difference = predicted_orders - actual_orders
+            
+            overprediction_penalty = 0.0
+            underprediction_penalty = 0.0
+            
+            if difference > 0:  # Overprediction
+                excess_orders = difference
+                
+                # Perishable ingredients: 100% loss
+                perishable_cost = (perishable_percentage / 100) * ingredient_cost_per_order
+                perishable_penalty = excess_orders * perishable_cost
+                
+                # Non-perishable ingredients: storage costs based on volume
+                non_perishable_percentage = 100 - perishable_percentage
+                non_perishable_kg = excess_orders * total_kg_per_portion * (non_perishable_percentage / 100)
+                storage_penalty = non_perishable_kg * (storage_cost_per_order / total_kg_per_portion)
+                
+                overprediction_penalty = perishable_penalty + storage_penalty
+                
+                print(f"   📦 Overprediction: {excess_orders:.0f} orders")
+                print(f"   💸 Perishable loss: €{perishable_penalty:.2f}")
+                print(f"   🏪 Storage cost: €{storage_penalty:.2f}")
+                
+            elif difference < 0:  # Underprediction
+                shortage_orders = abs(difference)
+                
+                # Emergency procurement at 150% cost (60% instead of 40%)
+                normal_cost = shortage_orders * ingredient_cost_per_order
+                emergency_cost = shortage_orders * avg_meal_price * EMERGENCY_COST_RATE
+                underprediction_penalty = emergency_cost - normal_cost
+                
+                print(f"   📦 Underprediction: {shortage_orders:.0f} orders")
+                print(f"   🚨 Emergency cost penalty: €{underprediction_penalty:.2f}")
+            
+            total_penalty = overprediction_penalty + underprediction_penalty
+            
+            # Calculate revenue impact
+            total_revenue = actual_orders * avg_meal_price
+            penalty_percentage = (total_penalty / total_revenue * 100) if total_revenue > 0 else 0
+            
+            return {
+                'actual_orders': int(actual_orders),
+                'predicted_orders': int(predicted_orders),
+                'difference': int(difference),
+                'meal_id': meal_id,
+                'meal_name': meal_name,
+                'meal_type': meal_type,
+                'avg_meal_price': avg_meal_price,
+                'perishable_percentage': perishable_percentage,
+                'total_kg_per_portion': total_kg_per_portion,
+                'overprediction_penalty': overprediction_penalty,
+                'underprediction_penalty': underprediction_penalty,
+                'total_penalty': total_penalty,
+                'total_revenue': total_revenue,
+                'penalty_percentage': penalty_percentage,
+                'ingredient_cost_per_order': ingredient_cost_per_order,
+                'storage_cost_per_order': storage_cost_per_order
+            }
+            
+        except Exception as e:
+            print(f"❌ Error calculating business cost for meal {meal_id}: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
+    
+    def evaluate_business_cost(self, model_key, custom_meal_price=None):
+        """
+        Evaluate business costs for a trained model using test weeks
+        
+        Parameters:
+        - model_key: identifier for the trained model
+        - custom_meal_price: optional custom meal price in Euro
+        
+        Returns:
+        - Dictionary with business cost analysis
+        """
+        try:
+            print(f"💰 Evaluating business costs for model: {model_key}")
+            
+            # Find the model
+            if model_key not in self.models:
+                # Try alternative key formats
+                alternatives = []
+                if model_key.startswith('all_'):
+                    alternatives.append(model_key.replace('all_', 'meal_'))
+                elif model_key.startswith('meal_'):
+                    alternatives.append(model_key.replace('meal_', 'all_'))
+                
+                for alt_key in alternatives:
+                    if alt_key in self.models:
+                        model_key = alt_key
+                        break
+                else:
+                    return None, f"Model not found: {model_key}"
+            
+            model_info = self.models[model_key]
+            meal_id = model_info['meal_id']
+            
+            # Get the comparison data (same period used for Prophet vs Baseline comparison)
+            comparison_data = self.get_model_comparison(model_key)
+            if not comparison_data:
+                return None, "No comparison data available for business cost analysis"
+            
+            # Use custom price or estimate from data
+            if custom_meal_price:
+                avg_meal_price = custom_meal_price
+            else:
+                # Estimate meal price (assume €15 average)
+                avg_meal_price = 15.0
+                if meal_id in self.meal_price_data and 'avg_checkout_price' in self.meal_price_data[meal_id]:
+                    avg_meal_price = self.meal_price_data[meal_id]['avg_checkout_price']
+            
+            print(f"💵 Using meal price: €{avg_meal_price:.2f}")
+            
+            # Calculate costs for each week in the comparison period
+            actual_orders = comparison_data['actual']
+            prophet_predictions = comparison_data['prophet_predicted']
+            weeks = comparison_data['weeks']
+            
+            weekly_costs = []
+            total_penalty = 0.0
+            total_revenue = 0.0
+            
+            for i, week in enumerate(weeks):
+                actual = actual_orders[i]
+                predicted = prophet_predictions[i]
+                
+                cost_analysis = self.calculate_business_cost(actual, predicted, meal_id, avg_meal_price)
+                if cost_analysis:
+                    weekly_costs.append({
+                        'week': week,
+                        'actual': actual,
+                        'predicted': predicted,
+                        'penalty_euro': cost_analysis['total_penalty'],
+                        'revenue_euro': cost_analysis['total_revenue'],
+                        'penalty_percentage': cost_analysis['penalty_percentage']
+                    })
+                    
+                    total_penalty += cost_analysis['total_penalty']
+                    total_revenue += cost_analysis['total_revenue']
+            
+            # Calculate summary metrics
+            avg_weekly_penalty = total_penalty / len(weekly_costs) if weekly_costs else 0
+            penalty_percentage_of_revenue = (total_penalty / total_revenue * 100) if total_revenue > 0 else 0
+            
+            # Project annual impact (52 weeks)
+            annual_penalty_estimate = avg_weekly_penalty * 52
+            annual_revenue_estimate = (total_revenue / len(weekly_costs)) * 52 if weekly_costs else 0
+            
+            meal_name = self.get_meal_display_name(meal_id)
+            
+            business_cost_analysis = {
+                'model_key': model_key,
+                'meal_id': meal_id,
+                'meal_name': meal_name,
+                'evaluation_period': comparison_data['eval_period'],
+                'weeks_analyzed': len(weekly_costs),
+                'avg_meal_price_euro': avg_meal_price,
+                'weekly_costs': weekly_costs,
+                'total_penalty_euro': total_penalty,
+                'total_revenue_euro': total_revenue,
+                'avg_weekly_penalty_euro': avg_weekly_penalty,
+                'penalty_percentage_of_revenue': penalty_percentage_of_revenue,
+                'annual_penalty_estimate_euro': annual_penalty_estimate,
+                'annual_revenue_estimate_euro': annual_revenue_estimate,
+                'prophet_accuracy': comparison_data['prophet_metrics']['accuracy']
+            }
+            
+            print(f"✅ Business cost analysis completed")
+            print(f"💰 Total penalty over {len(weekly_costs)} weeks: €{total_penalty:.2f}")
+            print(f"📊 Penalty as % of revenue: {penalty_percentage_of_revenue:.2f}%")
+            print(f"📅 Estimated annual penalty: €{annual_penalty_estimate:.2f}")
+            
+            return business_cost_analysis, f"Business cost analysis completed for {meal_name}"
+            
+        except Exception as e:
+            print(f"❌ Error in business cost evaluation: {e}")
+            import traceback
+            traceback.print_exc()
+            return None, f"Error evaluating business costs: {str(e)}"
+    
+    def compare_business_costs(self, model_key):
+        """
+        Compare business costs between Prophet and Baseline models
+        
+        Parameters:
+        - model_key: identifier for the trained model
+        
+        Returns:
+        - Dictionary with comparative business cost analysis
+        """
+        try:
+            print(f"💰 Comparing business costs: Prophet vs Baseline for {model_key}")
+            
+            # Get comparison data
+            comparison_data = self.get_model_comparison(model_key)
+            if not comparison_data:
+                return None, "No comparison data available for business cost analysis"
+            
+            model_info = self.models[model_key]
+            meal_id = model_info['meal_id']
+            
+            print(f"🍽️ Analyzing meal {meal_id} business costs")
+            
+            # Check if meal exists in database
+            meal_in_db = False
+            for key_variant in [str(meal_id), int(meal_id), meal_id]:
+                if key_variant in self.meal_database:
+                    meal_in_db = True
+                    break
+            
+            if meal_in_db:
+                print(f"✅ Meal {meal_id} found in meal database")
+            else:
+                print(f"⚠️ Meal {meal_id} not found in meal database - will use defaults")
+            
+            # Use checkout price if available, otherwise default to €15
+            avg_meal_price = 15.0
+            if meal_id in self.meal_price_data and 'avg_checkout_price' in self.meal_price_data[meal_id]:
+                avg_meal_price = self.meal_price_data[meal_id]['avg_checkout_price']
+                print(f"💵 Using meal-specific price: €{avg_meal_price:.2f}")
+            else:
+                print(f"💵 Using default price: €{avg_meal_price:.2f}")
+            
+            # Get data for comparison
+            actual_orders = comparison_data['actual']
+            prophet_predictions = comparison_data['prophet_predicted']
+            baseline_predictions = comparison_data['baseline_predicted']
+            weeks = comparison_data['weeks']
+            
+            print(f"📊 Processing {len(weeks)} weeks of comparison data")
+            
+            # Calculate costs for both models
+            prophet_weekly_penalties = []
+            baseline_weekly_penalties = []
+            weekly_revenues = []
+            
+            weekly_comparison = []
+            successful_weeks = 0
+            
+            for i, week in enumerate(weeks):
+                actual = actual_orders[i]
+                prophet_pred = prophet_predictions[i]
+                baseline_pred = baseline_predictions[i]
+                
+                # Calculate Prophet costs
+                prophet_cost = self.calculate_business_cost(actual, prophet_pred, meal_id, avg_meal_price)
+                baseline_cost = self.calculate_business_cost(actual, baseline_pred, meal_id, avg_meal_price)
+                
+                if prophet_cost and baseline_cost:
+                    prophet_penalty = prophet_cost['total_penalty']
+                    baseline_penalty = baseline_cost['total_penalty']
+                    revenue = prophet_cost['total_revenue']
+                    
+                    prophet_weekly_penalties.append(prophet_penalty)
+                    baseline_weekly_penalties.append(baseline_penalty)
+                    weekly_revenues.append(revenue)
+                    
+                    weekly_comparison.append({
+                        'week': week,
+                        'actual': actual,
+                        'prophet_predicted': prophet_pred,
+                        'baseline_predicted': baseline_pred,
+                        'prophet_penalty': prophet_penalty,
+                        'baseline_penalty': baseline_penalty,
+                        'savings': baseline_penalty - prophet_penalty,
+                        'revenue': revenue
+                    })
+                    successful_weeks += 1
+                else:
+                    print(f"⚠️ Could not calculate costs for week {week}")
+            
+            print(f"✅ Successfully processed {successful_weeks}/{len(weeks)} weeks")
+            
+            if not weekly_comparison:
+                return None, "Could not calculate business costs for any weeks"
+            
+            # Calculate weekly averages (as requested)
+            avg_weekly_prophet_penalty = sum(prophet_weekly_penalties) / len(prophet_weekly_penalties)
+            avg_weekly_baseline_penalty = sum(baseline_weekly_penalties) / len(baseline_weekly_penalties)
+            avg_weekly_savings = avg_weekly_baseline_penalty - avg_weekly_prophet_penalty
+            avg_weekly_revenue = sum(weekly_revenues) / len(weekly_revenues)
+            
+            # Calculate totals for test period
+            prophet_total_penalty = sum(prophet_weekly_penalties)
+            baseline_total_penalty = sum(baseline_weekly_penalties)
+            cost_savings_euro = baseline_total_penalty - prophet_total_penalty
+            total_revenue = sum(weekly_revenues)
+            
+            # Calculate percentages
+            cost_savings_percentage = (cost_savings_euro / baseline_total_penalty * 100) if baseline_total_penalty > 0 else 0
+            
+            # Project annual impact based on weekly averages
+            annual_savings_estimate = avg_weekly_savings * 52
+            annual_revenue_estimate = avg_weekly_revenue * 52
+            annual_savings_percentage = (annual_savings_estimate / annual_revenue_estimate * 100) if annual_revenue_estimate > 0 else 0
+            
+            # Determine ROI calculation
+            # Assume Prophet implementation cost of €50,000 annually
+            prophet_implementation_cost = 50000
+            roi_ratio = annual_savings_estimate / prophet_implementation_cost if prophet_implementation_cost > 0 else 0
+            payback_months = (prophet_implementation_cost / avg_weekly_savings * (1/4.33)) if avg_weekly_savings > 0 else float('inf')  # 4.33 weeks per month
+            
+            meal_name = self.get_meal_display_name(meal_id)
+            
+            business_comparison = {
+                'model_key': model_key,
+                'meal_id': meal_id,
+                'meal_name': meal_name,
+                'evaluation_period': comparison_data['eval_period'],
+                'weeks_analyzed': len(weekly_comparison),
+                'avg_meal_price_euro': avg_meal_price,
+                'weekly_comparison': weekly_comparison,
+                
+                # Total costs for test period
+                'prophet_total_penalty': prophet_total_penalty,
+                'baseline_total_penalty': baseline_total_penalty,
+                'cost_savings_euro': cost_savings_euro,
+                'cost_savings_percentage': cost_savings_percentage,
+                'total_revenue_euro': total_revenue,
+                
+                # Weekly averages (as requested)
+                'avg_weekly_savings_euro': avg_weekly_savings,
+                'avg_weekly_prophet_penalty': avg_weekly_prophet_penalty,
+                'avg_weekly_baseline_penalty': avg_weekly_baseline_penalty,
+                'avg_weekly_revenue': avg_weekly_revenue,
+                
+                # Annual projections based on weekly averages
+                'annual_savings_estimate_euro': annual_savings_estimate,
+                'annual_revenue_estimate_euro': annual_revenue_estimate,
+                'annual_savings_percentage': annual_savings_percentage,
+                
+                # ROI analysis
+                'prophet_implementation_cost_euro': prophet_implementation_cost,
+                'roi_ratio': roi_ratio,
+                'payback_months': min(payback_months, 999),  # Cap at 999 months for display
+                
+                # Model performance context
+                'prophet_accuracy': comparison_data['prophet_metrics']['accuracy'],
+                'baseline_accuracy': comparison_data['baseline_metrics']['accuracy'],
+                'accuracy_improvement': comparison_data['accuracy_improvement'],
+                
+                # Business recommendation
+                'business_recommendation': {
+                    'implement_prophet': cost_savings_euro > 0,
+                    'savings_per_euro_invested': roi_ratio,
+                    'payback_period_months': min(payback_months, 999),
+                    'annual_impact_estimate': annual_savings_estimate,
+                    'confidence_level': 'High' if comparison_data['accuracy_improvement'] > 5 else 'Medium' if comparison_data['accuracy_improvement'] > 0 else 'Low'
+                }
+            }
+            
+            print(f"✅ Business cost comparison completed")
+            print(f"💰 Average weekly Prophet penalty: €{avg_weekly_prophet_penalty:.2f}")
+            print(f"📊 Average weekly Baseline penalty: €{avg_weekly_baseline_penalty:.2f}")
+            print(f"💡 Average weekly savings with Prophet: €{avg_weekly_savings:.2f}")
+            print(f"📅 Estimated annual savings: €{annual_savings_estimate:.2f}")
+            print(f"📈 ROI ratio: {roi_ratio:.2f}x")
+            print(f"⏱️ Payback period: {payback_months:.1f} months")
+            
+            return business_comparison, f"Business cost comparison completed for {meal_name}"
+            
+        except Exception as e:
+            print(f"❌ Error in business cost comparison: {e}")
+            import traceback
+            traceback.print_exc()
+            return None, f"Error comparing business costs: {str(e)}"
+        
     def load_data(self):
         """Load train and test datasets"""
         try:
-            # Load meal names first
+            # Load meal names and database first
             self.load_meal_names()
             
             if os.path.exists('train.csv'):
@@ -89,6 +648,10 @@ class FoodDemandForecaster:
             else:
                 self.test_data = None
                 print("ℹ️ test.csv not found - continuing without it (not required for forecasting)")
+            
+            # Validate that we have meal database
+            if not self.meal_database:
+                print("⚠️ No meal database loaded - business cost analysis may use default values")
                 
             self.preprocess_data()
             self.analyze_data_availability()
@@ -135,7 +698,7 @@ class FoodDemandForecaster:
         return detected
 
     def create_regional_mapping(self):
-        """Create robust regional mapping for centers"""
+        """Create robust regional mapping for centers - excluding Region-Lyon"""
         if self.train_data is None:
             return {}
         
@@ -149,25 +712,30 @@ class FoodDemandForecaster:
                 print(f"📋 Fulfilment center data loaded: {len(center_info)} centers")
                 print(f"📋 Columns: {list(center_info.columns)}")
                 
-                # Create mapping based on region_code with improved consolidation
+                # Create mapping based on region_code - EXCLUDING Region-Lyon (85)
                 for _, row in center_info.iterrows():
                     center_id = row['center_id']
                     region_code = row['region_code']
                     
-                    # Map region codes to standardized region names
+                    # Map region codes to standardized region names - SKIP Lyon
                     if region_code == 56:
                         final_region = "Region-Kassel"
                     elif region_code == 34:
                         final_region = "Region-Luzern"  
                     elif region_code == 77:
                         final_region = "Region-Wien"
-                    else:  # region_code == 85 or any other
-                        final_region = "Region-Lyon"
+                    elif region_code == 85:
+                        # SKIP Region-Lyon completely
+                        print(f"   ⚠️ Skipping center {center_id} from Region-Lyon (poor data quality)")
+                        continue
+                    else:
+                        # Any other region codes also get assigned to a valid region
+                        final_region = "Region-Kassel"  # Default fallback
                     
                     regional_mapping[center_id] = final_region
                 
                 # Print detailed mapping
-                print(f"🗺️ Regional mapping created from fulfilment center info:")
+                print(f"🗺️ Regional mapping created (excluding Region-Lyon):")
                 
                 # Group by final region for summary
                 region_summary = {}
@@ -182,17 +750,13 @@ class FoodDemandForecaster:
                 # Check data availability per region
                 train_centers = set(self.train_data['center_id'].unique())
                 mapped_centers = set(regional_mapping.keys())
+                excluded_centers = train_centers - mapped_centers
                 
-                if not train_centers.issubset(mapped_centers):
-                    missing_centers = train_centers - mapped_centers
-                    print(f"⚠️ Missing centers in fulfilment info: {sorted(missing_centers)}")
-                    # Assign missing centers to Region-Luzern (default)
-                    for center in missing_centers:
-                        regional_mapping[center] = "Region-Luzern"
-                        print(f"   → Assigned center {center} to Region-Luzern (missing from fulfilment info)")
+                if excluded_centers:
+                    print(f"⚠️ Excluded centers (Region-Lyon): {sorted(excluded_centers)}")
                 
                 # Check actual data availability per region
-                print(f"\n📊 Data availability analysis per region:")
+                print(f"\n📊 Data availability analysis per region (excluding Lyon):")
                 for region in sorted(set(regional_mapping.values())):
                     region_centers = [c for c, r in regional_mapping.items() if r == region]
                     region_data = self.train_data[self.train_data['center_id'].isin(region_centers)]
@@ -206,6 +770,7 @@ class FoodDemandForecaster:
                         print(f"   ❌ {region}: NO DATA AVAILABLE")
                 
                 print(f"✅ Final regional mapping: {len(regional_mapping)} centers across {len(set(regional_mapping.values()))} regions")
+                print(f"🚫 Region-Lyon excluded due to data quality issues")
                 
             else:
                 print("📍 fulfilment_center_info.csv not found, using automatic regional mapping")
@@ -214,12 +779,12 @@ class FoodDemandForecaster:
                 
                 print(f"📍 Found {total_centers} centers: {centers}")
                 
-                # Divide centers into 4 regions with standardized names
-                centers_per_region = total_centers // 4
-                remainder = total_centers % 4
+                # Divide centers into 3 regions (excluding Lyon)
+                centers_per_region = total_centers // 3
+                remainder = total_centers % 3
                 
                 current_index = 0
-                region_names = ["Region-Kassel", "Region-Lyon", "Region-Wien", "Region-Luzern"]
+                region_names = ["Region-Kassel", "Region-Wien", "Region-Luzern"]  # Removed Lyon
                 
                 for i, region_name in enumerate(region_names):
                     region_size = centers_per_region + (1 if i < remainder else 0)
@@ -233,13 +798,13 @@ class FoodDemandForecaster:
                 
         except Exception as e:
             print(f"❌ Error loading fulfilment center info: {e}")
-            print("📍 Falling back to minimal regional mapping")
+            print("📍 Falling back to minimal regional mapping (excluding Lyon)")
             
-            # Fallback: simple mapping
+            # Fallback: simple mapping without Lyon
             centers = sorted(self.train_data['center_id'].unique())
             for i, center in enumerate(centers):
-                region_names = ["Region-Kassel", "Region-Lyon", "Region-Wien", "Region-Luzern"]
-                regional_mapping[center] = region_names[i % 4]
+                region_names = ["Region-Kassel", "Region-Wien", "Region-Luzern"]  # No Lyon
+                regional_mapping[center] = region_names[i % 3]
         
         return regional_mapping
 
@@ -299,20 +864,31 @@ class FoodDemandForecaster:
             print(f"⚠️ No meal data available for filtering")
 
     def preprocess_data(self):
-        """Preprocess data for Prophet model with checkout_price regressor"""
+        """Preprocess data for Prophet model with checkout_price regressor - excluding Region-Lyon"""
         if self.train_data is None:
             return
         
         # Filter meals with insufficient coverage FIRST
         self.filter_meals()
         
-        # Create regional mapping
+        # Create regional mapping (excludes Lyon)
         self.regional_mapping = self.create_regional_mapping()
         
-        # Add region column
+        # Add region column and filter out unmapped centers (Lyon centers)
         self.train_data['region'] = self.train_data['center_id'].map(self.regional_mapping)
+        
+        # Remove rows where region is NaN (these are Lyon centers that were excluded)
+        initial_count = len(self.train_data)
+        self.train_data = self.train_data.dropna(subset=['region'])
+        excluded_count = initial_count - len(self.train_data)
+        
+        if excluded_count > 0:
+            print(f"🚫 Excluded {excluded_count:,} records from Region-Lyon (poor data quality)")
+            print(f"✅ Remaining data: {len(self.train_data):,} records")
+        
         if self.test_data is not None:
             self.test_data['region'] = self.test_data['center_id'].map(self.regional_mapping)
+            self.test_data = self.test_data.dropna(subset=['region'])
         
         # Detect column names
         self.column_mapping = self.detect_column_names()
@@ -375,6 +951,7 @@ class FoodDemandForecaster:
             print(f"📅 Week range: {min_week} - {max_week}")
             print(f"🗺️ Regional aggregation complete with {len(self.regional_mapping)} centers in {len(set(self.regional_mapping.values()))} regions")
             print(f"🍽️ Meal-specific forecasting enabled with checkout_price regressor")
+            print(f"🚫 Region-Lyon excluded from all analysis")
             
         except Exception as e:
             print(f"❌ Error preprocessing data: {e}")
@@ -485,6 +1062,9 @@ class FoodDemandForecaster:
         print(f"   • Meal + region combinations: {viable_combinations}")
         print(f"   • Price regressors available: {'Yes' if self.column_mapping.get('checkout_price') else 'No'}")
         print(f"🎯 Focus: Meal-specific demand for ingredient ordering")
+        print(f"💰 Business cost analysis: {'Enabled' if self.meal_database else 'Limited (using defaults)'}")
+        if self.meal_database:
+            print(f"🍽️ Meal database: {len(self.meal_database)} meals with ingredient cost structures")
 
     def _normalize_model_key(self, region_id=None, meal_id=None):
         """Create consistent model key"""
@@ -752,7 +1332,7 @@ class FoodDemandForecaster:
             print(f"📈 Coverage: {coverage:.1%} of total timeline")
             print(f"📦 Demand range: {demand_data['num_orders'].min()}-{demand_data['num_orders'].max()}")
             
-            # NEW: Analyze data characteristics and choose appropriate model
+            # Analyze data characteristics and choose appropriate model
             demand_values = demand_data['num_orders'].values
             variance_level = self.detect_data_characteristics(demand_values)
             
@@ -771,7 +1351,7 @@ class FoodDemandForecaster:
             
             print(f"💰 Price regressor added: {regressors_added}")
             
-            # NEW: Create adaptive Prophet model based on data characteristics
+            # Create adaptive Prophet model based on data characteristics
             model = self.create_robust_prophet_model(variance_level)
             
             # Add checkout_price regressor
@@ -790,8 +1370,8 @@ class FoodDemandForecaster:
                 'coverage': coverage,
                 'training_data': prophet_data,  # Store for evaluation
                 'original_data': demand_data,   # Store original weekly data
-                'variance_level': variance_level,  # NEW: Store variance level
-                'data_cv': (np.std(demand_values) / np.mean(demand_values)) * 100  # NEW: Store CV
+                'variance_level': variance_level,  # Store variance level
+                'data_cv': (np.std(demand_values) / np.mean(demand_values)) * 100  # Store CV
             }
             
             # Generate predictions on training data for performance visualization
@@ -1017,7 +1597,7 @@ class FoodDemandForecaster:
             print(f"📊 Predictions range: {y_pred.min():.1f} - {y_pred.max():.1f}")
             print(f"📊 Actual range: {y_true.min()} - {y_true.max()}")
             
-            # NEW: Use robust metrics calculation
+            # Use robust metrics calculation
             robust_metrics = self.calculate_robust_metrics(y_true, y_pred)
             
             # Add standard fields for compatibility
@@ -1028,6 +1608,7 @@ class FoodDemandForecaster:
                 'total_weeks_used': total_weeks,
                 'evaluation_weeks': f"{eval_min_week}-{eval_max_week}",
                 'meal_id': meal_id,
+                'meal_name': self.get_meal_display_name(meal_id),
                 'region_id': region_id,
                 'regressors_used': len(regressors),
                 'variance_level': variance_level,
@@ -1037,7 +1618,7 @@ class FoodDemandForecaster:
             print(f"✅ Robust metrics calculated for Meal {meal_id}:")
             print(f"   📊 {metrics['accuracy_note']}")
             for key, value in metrics.items():
-                if isinstance(value, (int, float)) and key not in ['accuracy_note']:
+                if isinstance(value, (int, float)) and key not in ['accuracy_note', 'meal_name']:
                     if 'mape' in key or 'accuracy' in key or 'cv' in key:
                         print(f"   {key}: {value:.1f}%")
                     else:
@@ -1059,8 +1640,8 @@ class FoodDemandForecaster:
     
     def get_model_summary(self):
         """Get summary of all trained models and their performance"""
-        # Get actual regions from the regional mapping
-        actual_regions = sorted(set(self.regional_mapping.values())) if self.regional_mapping else ['Region-Kassel', 'Region-Lyon', 'Region-Wien', 'Region-Luzern']
+        # Get actual regions from the regional mapping (excluding Lyon)
+        actual_regions = sorted(set(self.regional_mapping.values())) if self.regional_mapping else ['Region-Kassel', 'Region-Wien', 'Region-Luzern']
         
         # Create meals list with names for frontend
         meals_list = []
@@ -1087,7 +1668,9 @@ class FoodDemandForecaster:
                     int(self.train_data['week'].max()) if self.train_data is not None else 0
                 ],
                 'has_price_data': bool(self.column_mapping.get('checkout_price')),
-                'price_regressors_available': ['checkout_price'] if self.column_mapping.get('checkout_price') else []
+                'price_regressors_available': ['checkout_price'] if self.column_mapping.get('checkout_price') else [],
+                'business_cost_analysis_enabled': len(self.meal_database) > 0,
+                'excluded_regions': ['Region-Lyon']  # Track excluded regions
             },
             'data_availability': self.data_availability
         }

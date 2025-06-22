@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Web Server for Prophet Food Demand Forecasting Dashboard
-Production version with model comparison functionality
+Enhanced Web Server for Prophet Food Demand Forecasting Dashboard
+Production version with business cost analysis functionality
 """
 
 import http.server
@@ -33,6 +33,10 @@ class ForecastingHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
             self.handle_training_performance(parsed_path.query)
         elif parsed_path.path == '/api/model_comparison':
             self.handle_model_comparison(parsed_path.query)
+        elif parsed_path.path == '/api/business_cost_comparison':  # NEW
+            self.handle_business_cost_comparison(parsed_path.query)
+        elif parsed_path.path == '/api/business_cost_analysis':    # NEW
+            self.handle_business_cost_analysis(parsed_path.query)
         elif parsed_path.path == '/api/data_availability':
             self.handle_data_availability()
         elif parsed_path.path == '/api/summary':
@@ -126,7 +130,7 @@ class ForecastingHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
         self.send_json_response(response)
     
     def handle_forecast(self, query):
-        """Handle forecast generation API endpoint"""
+        """Handle forecast generation API endpoint with automatic business cost analysis"""
         params = parse_qs(query)
         model_key = params.get('model', ['overall'])[0]
         weeks = int(params.get('weeks', [10])[0])
@@ -162,13 +166,35 @@ class ForecastingHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
                 'meal_name': meal_name  # Add meal name to response
             }
             
+            # **NEW: Automatically generate business cost analysis**
+            business_cost_analysis = None
+            try:
+                print(f"💰 Automatically generating business cost analysis for forecast...")
+                business_comparison, cost_message = forecaster.compare_business_costs(model_key)
+                
+                if business_comparison:
+                    business_cost_analysis = business_comparison
+                    print(f"✅ Business cost analysis included in forecast response")
+                    print(f"💰 Weekly savings: €{business_comparison['avg_weekly_savings_euro']:.2f}")
+                    print(f"📅 Annual savings: €{business_comparison['annual_savings_estimate_euro']:.2f}")
+                else:
+                    print(f"⚠️ Business cost analysis failed: {cost_message}")
+                    
+            except Exception as e:
+                print(f"❌ Error generating business cost analysis: {e}")
+            
             response = {
                 'success': True,
                 'message': message,
                 'forecast': forecast_data,
-                'model_used': model_key
+                'model_used': model_key,
+                'business_cost_analysis': business_cost_analysis  # **NEW: Include business cost analysis**
             }
             print(f"✅ Forecast generated successfully for {meal_name or f'Meal {meal_id}'}")
+            
+            if business_cost_analysis:
+                print(f"💰 Business cost analysis included with forecast")
+            
         else:
             response = {
                 'success': False,
@@ -239,6 +265,94 @@ class ForecastingHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
             response = {
                 'success': False,
                 'message': f"Error generating model comparison: {str(e)}"
+            }
+        
+        self.send_json_response(response)
+    
+    def handle_business_cost_comparison(self, query):
+        """Handle business cost comparison API endpoint - NEW"""
+        params = parse_qs(query)
+        model_key = params.get('model', ['overall'])[0]
+        
+        print(f"💰 Business cost comparison request for: '{model_key}'")
+        print(f"🔍 Available models: {list(forecaster.models.keys())}")
+        
+        try:
+            # Generate business cost comparison
+            business_comparison, message = forecaster.compare_business_costs(model_key)
+            
+            if business_comparison:
+                response = {
+                    'success': True,
+                    'message': message,
+                    'business_comparison': business_comparison
+                }
+                print(f"✅ Business cost comparison generated successfully")
+                print(f"💰 Prophet cost: €{business_comparison['prophet_total_penalty']:.2f}")
+                print(f"📊 Baseline cost: €{business_comparison['baseline_total_penalty']:.2f}")
+                print(f"📈 Savings: €{business_comparison['cost_savings_euro']:.2f}")
+                print(f"🎯 Annual impact: €{business_comparison['annual_savings_estimate_euro']:.2f}")
+            else:
+                response = {
+                    'success': False,
+                    'message': message
+                }
+                print(f"❌ Business cost comparison failed: {message}")
+                
+        except Exception as e:
+            print(f"❌ Business cost comparison error: {e}")
+            import traceback
+            traceback.print_exc()
+            response = {
+                'success': False,
+                'message': f"Error generating business cost comparison: {str(e)}"
+            }
+        
+        self.send_json_response(response)
+    
+    def handle_business_cost_analysis(self, query):
+        """Handle business cost analysis API endpoint - NEW"""
+        params = parse_qs(query)
+        model_key = params.get('model', ['overall'])[0]
+        meal_price = params.get('meal_price', [None])[0]
+        
+        if meal_price:
+            try:
+                meal_price = float(meal_price)
+            except ValueError:
+                meal_price = None
+        
+        print(f"💰 Business cost analysis request for: '{model_key}'")
+        if meal_price:
+            print(f"💵 Custom meal price: €{meal_price:.2f}")
+        
+        try:
+            # Generate business cost analysis
+            business_costs, message = forecaster.evaluate_business_cost(model_key, meal_price)
+            
+            if business_costs:
+                response = {
+                    'success': True,
+                    'message': message,
+                    'business_costs': business_costs
+                }
+                print(f"✅ Business cost analysis generated successfully")
+                print(f"💰 Total penalty: €{business_costs['total_penalty_euro']:.2f}")
+                print(f"📊 Penalty as % of revenue: {business_costs['penalty_percentage_of_revenue']:.2f}%")
+            else:
+                response = {
+                    'success': False,
+                    'message': message
+                }
+                print(f"❌ Business cost analysis failed: {message}")
+                
+        except Exception as e:
+            print(f"❌ Business cost analysis error: {e}")
+            import traceback
+            traceback.print_exc()
+            response = {
+                'success': False,
+                'message': f"Error generating business cost analysis: {str(e)}"
             }
         
         self.send_json_response(response)
@@ -324,7 +438,13 @@ def start_server(port=8000):
             print(f"📊 Open your browser and go to: http://localhost:{port}")
             print(f"🗺️ Features: Regional analysis, Prophet training, model evaluation")
             print(f"🎯 Performance metrics: Prophet accuracy, MAE, RMSE, R² scores")
-            print(f"🥊 NEW: Prophet vs Baseline model comparison")
+            print(f"🥊 Model comparison: Prophet vs Baseline evaluation")
+            print(f"💰 NEW: Business cost analysis in Euro terms")
+            print(f"💸 NEW: Food waste vs lost sales cost breakdown")
+            print(f"📈 NEW: Weekly/annual savings projections")
+            print(f"🍽️ NEW: AI-generated meal database with ingredients")
+            print(f"⚖️ NEW: Perishable vs non-perishable cost modeling")
+            print(f"📊 NEW: ROI analysis for Prophet implementation")
             print(f"🛑 Press Ctrl+C to stop the server")
             print("-" * 60)
             
@@ -346,7 +466,7 @@ def start_server(port=8000):
 
 if __name__ == "__main__":
     print("🧠 Facebook Prophet Food Demand Forecasting")
-    print("🗺️ Regional Analysis Version with Model Comparison")
+    print("🗺️ Regional Analysis Version with Business Cost Analysis")
     print("=" * 60)
     print("📋 Requirements:")
     print("   - pip install prophet pandas numpy scikit-learn scipy")
@@ -356,8 +476,12 @@ if __name__ == "__main__":
     print("=" * 60)
     print("🆕 New Features:")
     print("   - Prophet vs Baseline model comparison")
-    print("   - 'Same week last year' naive baseline")
-    print("   - Side-by-side performance evaluation")
-    print("   - Visual comparison charts")
+    print("   - Business cost analysis in Euro terms")
+    print("   - Food waste vs lost sales breakdown")
+    print("   - Weekly/annual savings projections")
+    print("   - Real ROI calculation for forecasting models")
+    print("   - AI-generated meal database with ingredients")
+    print("   - Perishable vs non-perishable cost modeling")
+    print("   - Annual business impact projections")
     print("=" * 60)
     start_server()

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Prophet Food Demand Forecasting</title>
+    <title>Prophet Food Demand Forecasting with Business Cost Analysis</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -59,6 +59,12 @@
             transform: translateY(-2px); 
             box-shadow: 0 12px 25px rgba(78, 205, 196, 0.4); 
         }
+        .btn.secondary {
+            background: linear-gradient(45deg, #FF6B6B, #FF8E53);
+        }
+        .btn.secondary:hover {
+            box-shadow: 0 12px 25px rgba(255, 107, 107, 0.4);
+        }
         .btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
         .metrics {
             display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -72,6 +78,62 @@
         .metric-card:hover { transform: translateY(-5px); }
         .metric-card h3 { font-size: 2.5rem; margin-bottom: 10px; font-weight: 700; }
         .metric-card p { font-size: 1.1rem; opacity: 0.9; }
+        
+        /* Financial Impact Analysis Styles */
+        .business-cost-section {
+            background: linear-gradient(135deg, #FF6B6B, #4ECDC4);
+            color: white; padding: 25px; border-radius: 15px; margin-bottom: 30px;
+            box-shadow: 0 10px 30px rgba(255, 107, 107, 0.3);
+        }
+        .cost-comparison-grid {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px; margin: 20px 0;
+        }
+        .cost-card {
+            background: rgba(255, 255, 255, 0.1); padding: 20px; border-radius: 12px;
+            backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .cost-card.savings { 
+            border: 2px solid rgba(76, 175, 80, 0.7);
+            background: rgba(76, 175, 80, 0.2);
+        }
+        .cost-card.cost-loss { 
+            border: 2px solid rgba(244, 67, 54, 0.7);
+            background: rgba(244, 67, 54, 0.2);
+        }
+        .cost-card.prophet { border: 2px solid rgba(102, 126, 234, 0.5); }
+        .cost-card.baseline { border: 2px solid rgba(255, 255, 255, 0.3); }
+        .cost-value { font-size: 2rem; font-weight: bold; margin-bottom: 5px; }
+        .cost-label { font-size: 1rem; opacity: 0.9; }
+        .cost-description { font-size: 0.85rem; margin-top: 8px; opacity: 0.8; }
+        
+        /* Weekly Financial Impact Styles */
+        .weekly-cost-section {
+            background: linear-gradient(135deg, #4ECDC4, #44A08D);
+            color: white; padding: 25px; border-radius: 15px; margin-bottom: 30px;
+            box-shadow: 0 10px 30px rgba(78, 205, 196, 0.3);
+        }
+        .weekly-cost-grid {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px; margin: 20px 0;
+        }
+        .weekly-cost-item {
+            text-align: center; padding: 20px;
+            background: rgba(255, 255, 255, 0.1); border-radius: 12px;
+            backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .weekly-cost-item.savings { 
+            border: 2px solid rgba(76, 175, 80, 0.7);
+            background: rgba(76, 175, 80, 0.2);
+        }
+        .weekly-cost-item.cost-loss { 
+            border: 2px solid rgba(244, 67, 54, 0.7);
+            background: rgba(244, 67, 54, 0.2);
+        }
+        .weekly-cost-value { font-size: 2rem; font-weight: bold; margin-bottom: 5px; }
+        .weekly-cost-label { font-size: 1rem; opacity: 0.9; }
+        .weekly-cost-description { font-size: 0.85rem; margin-top: 8px; opacity: 0.8; }
+        
         .charts {
             display: grid; grid-template-columns: 1fr 1fr;
             gap: 30px; margin-bottom: 30px;
@@ -89,6 +151,7 @@
             max-height: 350px;
         }
         .full-width { grid-column: 1 / -1; }
+        
         .performance-section {
             background: white; padding: 25px; border-radius: 15px;
             margin-bottom: 30px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
@@ -103,6 +166,7 @@
         }
         .performance-item .value { font-size: 1.5rem; font-weight: bold; color: #667eea; }
         .performance-item .label { font-size: 0.9rem; color: #666; margin-top: 5px; }
+        
         .comparison-section {
             background: linear-gradient(135deg, #FF6B6B, #FF8E53);
             color: white; padding: 25px; border-radius: 15px;
@@ -125,6 +189,7 @@
             border: 2px solid rgba(76, 175, 80, 0.7);
             background: rgba(76, 175, 80, 0.2);
         }
+        
         .insights {
             background: linear-gradient(135deg, #FF6B6B, #4ECDC4);
             color: white; padding: 25px; border-radius: 15px; margin-top: 30px;
@@ -137,6 +202,7 @@
         .insights li:before {
             content: "✓"; position: absolute; left: 0; font-weight: bold;
         }
+        
         .loading { display: none; text-align: center; padding: 20px; }
         .spinner {
             border: 4px solid #f3f3f3; border-top: 4px solid #667eea;
@@ -151,6 +217,7 @@
             border-color: #28a745 !important;
             box-shadow: 0 0 0 3px rgba(40, 167, 69, 0.1) !important;
         }
+        
         .business-summary {
             background: linear-gradient(135deg, #667eea, #764ba2);
             color: white; padding: 25px; border-radius: 15px; margin-bottom: 30px;
@@ -221,11 +288,14 @@
         .business-recommendations li:before {
             content: "💡"; position: absolute; left: -5px; font-size: 1.1rem;
         }
+        
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         @media (max-width: 768px) {
             .charts { grid-template-columns: 1fr; }
             .header h1 { font-size: 2rem; }
             .controls { grid-template-columns: 1fr; }
+            .cost-comparison-grid { grid-template-columns: 1fr; }
+            .weekly-cost-grid { grid-template-columns: 1fr; }
         }
         @media (max-width: 1024px) and (min-width: 769px) {
             .controls { grid-template-columns: 1fr 1fr; }
@@ -236,7 +306,7 @@
     <div class="container">
         <div class="header">
             <h1>🧠 Prophet Food Demand Forecasting</h1>
-            <p>AI-Powered Regional Analysis with Baseline Comparison</p>
+            <p>AI-Powered Regional Analysis with Financial Impact Assessment</p>
         </div>
 
         <div class="status" id="statusSection">
@@ -264,13 +334,27 @@
                 <input type="number" id="confidence" value="95" min="50" max="99" step="1" placeholder="e.g. 95">
             </div>
             <div class="action-buttons">
-                <button class="btn" onclick="trainAndShowForecast()" id="mainActionBtn">Train & Show Forecast</button>
+                <button class="btn" onclick="trainAndShowForecast()" id="mainActionBtn">Train & Show Forecast + Financial Impact</button>
             </div>
         </div>
 
         <div class="loading" id="loadingSection">
             <div class="spinner"></div>
-            <p>Training Prophet model, generating forecast, and running baseline comparison...</p>
+            <p>Training Prophet model, generating forecast, and calculating financial impact...</p>
+        </div>
+
+        <!-- Financial Impact Analysis Section -->
+        <div class="business-cost-section" id="businessCostSection" style="display: none;">
+            <h3>💰 Financial Impact: Prophet vs Baseline</h3>
+            <p>Money saved (or lost) by using Prophet instead of naive "same week last year" forecasting</p>
+            <div class="cost-comparison-grid" id="costComparisonGrid"></div>
+        </div>
+
+        <!-- Weekly Financial Impact Section -->
+        <div class="weekly-cost-section" id="weeklyCostSection" style="display: none;">
+            <h3>📅 Weekly Financial Impact</h3>
+            <p>Average weekly savings (or losses) from using Prophet instead of baseline forecasting</p>
+            <div class="weekly-cost-grid" id="weeklyCostGrid"></div>
         </div>
 
         <div class="performance-section" id="performanceSection" style="display: none;">
@@ -320,7 +404,7 @@
         </div>
 
         <div class="insights" id="insights" style="display: none;">
-            <h3>🧠 Prophet Model Insights & Regional Recommendations</h3>
+            <h3>🧠 Prophet Model Insights & Business Recommendations</h3>
             <ul id="insightsList"></ul>
         </div>
     </div>
@@ -328,6 +412,7 @@
     <script>
         let currentModel = null, currentForecast = null, currentMetrics = null;
         let currentTrainingPerformance = null, currentComparison = null;
+        let currentBusinessCost = null;
         let dataAvailability = null;
         let forecastChart = null, performanceChart = null, accuracyChart = null;
         
@@ -503,7 +588,11 @@
         function updateStatusSection(data) {
             const statusMsg = document.getElementById('statusMessage');
             if (data.data_info.train_records > 0) {
-                statusMsg.innerHTML = `✅ Data loaded successfully<br>📊 Training data: ${data.data_info.train_records.toLocaleString()} records<br>🧪 Test data: ${data.data_info.test_records.toLocaleString()} records<br>🗺️ Regions: 4 | 🍽️ Meals: ${data.data_info.meals.length}<br>📅 Weeks: ${data.data_info.weeks_range[0]} - ${data.data_info.weeks_range[1]}`;
+                const businessCostStatus = data.data_info.business_cost_analysis_enabled ? 
+                    '<br>💰 Business cost analysis: Enabled with AI-generated meal database' : 
+                    '<br>⚠️ Business cost analysis: Limited (no meal database)';
+                
+                statusMsg.innerHTML = `✅ Data loaded successfully<br>📊 Training data: ${data.data_info.train_records.toLocaleString()} records<br>🧪 Test data: ${data.data_info.test_records.toLocaleString()} records<br>🗺️ Regions: 4 | 🍽️ Meals: ${data.data_info.meals.length}<br>📅 Weeks: ${data.data_info.weeks_range[0]} - ${data.data_info.weeks_range[1]}${businessCostStatus}`;
             } else {
                 statusMsg.textContent = '❌ No data found. Please ensure train.csv and test.csv are in the same directory.';
             }
@@ -631,13 +720,31 @@
                     showComparisonSection(comparisonData.comparison);
                 }
                 
+                // Step 4: Handle automatic business cost analysis from forecast response
+                console.log("🔍 Checking for business cost analysis in forecast response:", forecastData);
+                if (forecastData.business_cost_analysis) {
+                    console.log("✅ Business cost analysis found:", forecastData.business_cost_analysis);
+                    currentBusinessCost = forecastData.business_cost_analysis;
+                    showBusinessCostAnalysis(forecastData.business_cost_analysis);
+                    console.log("✅ Business cost analysis displayed");
+                } else {
+                    console.log("❌ No business cost analysis in forecast response");
+                    console.log("🔍 Forecast response keys:", Object.keys(forecastData));
+                }
+                
                 // Update dashboard
                 updateDashboard();
                 
                 const comparisonText = currentComparison ? 
                     ` | Prophet: ${currentComparison.prophet_metrics.accuracy.toFixed(1)}% vs Baseline: ${currentComparison.baseline_metrics.accuracy.toFixed(1)}%` : '';
                 
-                showStatusMessage(`✅ Complete! Prophet model trained, forecast generated, and baseline comparison completed${comparisonText}`, 'success');
+                const costText = currentBusinessCost ? 
+                    (currentBusinessCost.avg_weekly_savings_euro >= 0 ? 
+                        ` | Saving €${currentBusinessCost.avg_weekly_savings_euro.toFixed(2)}/week` : 
+                        ` | Losing €${Math.abs(currentBusinessCost.avg_weekly_savings_euro).toFixed(2)}/week`) : '';
+                
+                console.log("📊 Status message will include:", { comparisonText, costText });
+                showStatusMessage(`✅ Complete! Prophet model trained, forecast generated, and financial impact calculated${comparisonText}${costText}`, 'success');
                 
             } catch (error) {
                 console.error('Error in train and forecast:', error);
@@ -648,6 +755,145 @@
             
             showLoading(false); 
             disableButtons(false);
+        }
+
+        function showBusinessCostAnalysis(businessData) {
+            // Show business cost section
+            const costSection = document.getElementById('businessCostSection');
+            const costGrid = document.getElementById('costComparisonGrid');
+            costGrid.innerHTML = '';
+            
+            // Update title with meal information
+            const title = costSection.querySelector('h3');
+            const mealName = businessData.meal_name || `Meal ${businessData.meal_id}`;
+            title.textContent = `💰 Financial Impact: Prophet vs Baseline for ${mealName}`;
+            
+            // Update description to focus on savings
+            const description = costSection.querySelector('p');
+            description.textContent = 'Money saved (or lost) by using Prophet instead of naive "same week last year" forecasting';
+            
+            const isSaving = businessData.cost_savings_euro >= 0;
+            const savingsSign = isSaving ? '+' : '';
+            const impactIcon = isSaving ? '💰' : '❌';
+            const impactLabel = isSaving ? 'Money Saved' : 'Additional Cost';
+            const impactDescription = isSaving ? 
+                `Saved by avoiding baseline's poor predictions` : 
+                `Lost due to Prophet being worse than baseline`;
+            
+            // Main financial impact
+            const impactCard = document.createElement('div');
+            impactCard.className = isSaving ? 'cost-card savings' : 'cost-card cost-loss';
+            impactCard.innerHTML = `
+                <div class="cost-value">${impactIcon} ${savingsSign}€${Math.abs(businessData.cost_savings_euro).toFixed(2)}</div>
+                <div class="cost-label">${impactLabel}</div>
+                <div class="cost-description">${impactDescription} over ${businessData.weeks_analyzed} test weeks</div>
+            `;
+            costGrid.appendChild(impactCard);
+            
+            // Percentage improvement
+            const percentCard = document.createElement('div');
+            percentCard.className = 'cost-card';
+            const percentSign = businessData.cost_savings_percentage >= 0 ? '+' : '';
+            const percentIcon = businessData.cost_savings_percentage >= 0 ? '📈' : '📉';
+            percentCard.innerHTML = `
+                <div class="cost-value">${percentIcon} ${percentSign}${businessData.cost_savings_percentage.toFixed(1)}%</div>
+                <div class="cost-label">Cost Improvement</div>
+                <div class="cost-description">Compared to baseline approach</div>
+            `;
+            costGrid.appendChild(percentCard);
+            
+            // Decision recommendation
+            const recommendCard = document.createElement('div');
+            recommendCard.className = isSaving ? 'cost-card prophet' : 'cost-card baseline';
+            const recommendation = isSaving ? 'Use Prophet' : 'Reconsider Prophet';
+            const recommendIcon = isSaving ? '✅' : '⚠️';
+            const recommendDesc = isSaving ? 
+                'Prophet clearly outperforms baseline' : 
+                'Baseline performs better - review model';
+            recommendCard.innerHTML = `
+                <div class="cost-value">${recommendIcon} ${recommendation}</div>
+                <div class="cost-label">Recommendation</div>
+                <div class="cost-description">${recommendDesc}</div>
+            `;
+            costGrid.appendChild(recommendCard);
+            
+            costSection.style.display = 'block';
+            
+            // Show weekly cost analysis
+            showWeeklyCostAnalysis(businessData);
+        }
+
+        function showWeeklyCostAnalysis(businessData) {
+            const weeklySection = document.getElementById('weeklyCostSection');
+            const weeklyGrid = document.getElementById('weeklyCostGrid');
+            weeklyGrid.innerHTML = '';
+            
+            // Update title and description to focus on savings
+            const title = weeklySection.querySelector('h3');
+            title.textContent = '📅 Weekly Financial Impact';
+            
+            const description = weeklySection.querySelector('p');
+            description.textContent = 'Average weekly savings (or losses) from using Prophet instead of baseline forecasting';
+            
+            const isSaving = businessData.avg_weekly_savings_euro >= 0;
+            const savingsSign = isSaving ? '+' : '';
+            const savingsIcon = isSaving ? '💰' : '💸';
+            
+            // Weekly impact (main metric)
+            const weeklyImpactItem = document.createElement('div');
+            weeklyImpactItem.className = isSaving ? 'weekly-cost-item savings' : 'weekly-cost-item cost-loss';
+            weeklyImpactItem.innerHTML = `
+                <div class="weekly-cost-value">${savingsIcon} ${savingsSign}€${Math.abs(businessData.avg_weekly_savings_euro).toFixed(2)}</div>
+                <div class="weekly-cost-label">${isSaving ? 'Weekly Savings' : 'Weekly Loss'}</div>
+                <div class="weekly-cost-description">${isSaving ? 'Money saved each week with Prophet' : 'Money lost each week vs baseline'}</div>
+            `;
+            weeklyGrid.appendChild(weeklyImpactItem);
+            
+            // Annual projection
+            const annualImpact = businessData.annual_savings_estimate_euro;
+            const annualIsSaving = annualImpact >= 0;
+            const annualSign = annualIsSaving ? '+' : '';
+            const annualIcon = annualIsSaving ? '📈' : '📉';
+            
+            const annualItem = document.createElement('div');
+            annualItem.className = annualIsSaving ? 'weekly-cost-item' : 'weekly-cost-item cost-loss';
+            annualItem.innerHTML = `
+                <div class="weekly-cost-value">${annualIcon} ${annualSign}€${Math.abs(annualImpact).toLocaleString()}</div>
+                <div class="weekly-cost-label">${annualIsSaving ? 'Annual Savings' : 'Annual Loss'}</div>
+                <div class="weekly-cost-description">Projected yearly impact (52 weeks)</div>
+            `;
+            weeklyGrid.appendChild(annualItem);
+            
+            // Test period context
+            const testPeriodItem = document.createElement('div');
+            testPeriodItem.className = 'weekly-cost-item';
+            testPeriodItem.innerHTML = `
+                <div class="weekly-cost-value">📊 ${businessData.weeks_analyzed}</div>
+                <div class="weekly-cost-label">Test Weeks</div>
+                <div class="weekly-cost-description">Real historical comparison period</div>
+            `;
+            weeklyGrid.appendChild(testPeriodItem);
+            
+            // Business insight
+            const insightItem = document.createElement('div');
+            insightItem.className = 'weekly-cost-item';
+            const insightText = isSaving ? 
+                (businessData.avg_weekly_savings_euro > 50 ? 'Significant Impact' : 'Moderate Impact') :
+                'Needs Review';
+            const insightIcon = isSaving ? 
+                (businessData.avg_weekly_savings_euro > 50 ? '🎯' : '👍') : '⚠️';
+            const insightDesc = isSaving ?
+                (businessData.avg_weekly_savings_euro > 50 ? 'High value from Prophet forecasting' : 'Positive but modest improvement') :
+                'Consider model improvements';
+                
+            insightItem.innerHTML = `
+                <div class="weekly-cost-value">${insightIcon} ${insightText}</div>
+                <div class="weekly-cost-label">Business Impact</div>
+                <div class="weekly-cost-description">${insightDesc}</div>
+            `;
+            weeklyGrid.appendChild(insightItem);
+            
+            weeklySection.style.display = 'block';
         }
 
         async function loadTrainingPerformance(modelKey) {
@@ -675,7 +921,8 @@
             
             const title = section.querySelector('h3');
             if (metrics.meal_id) {
-                title.textContent = `🎯 Model Performance Evaluation - Meal ${metrics.meal_id}${metrics.region_id ? ` (${metrics.region_id})` : ''}`;
+                const mealName = metrics.meal_name || `Meal ${metrics.meal_id}`;
+                title.textContent = `🎯 Model Performance Evaluation - ${mealName}${metrics.region_id ? ` (${metrics.region_id})` : ''}`;
             }
             
             const metricsConfig = [
@@ -684,9 +931,7 @@
                 { key: 'rmse', label: 'RMSE', format: val => val != null ? val.toFixed(0) : 'N/A' },
                 { key: 'r2', label: 'R² Score', format: val => val != null ? val.toFixed(3) : 'N/A' },
                 { key: 'mape', label: 'MAPE', format: val => val != null ? val.toFixed(1) + '%' : 'N/A' },
-                { key: 'bias', label: 'Bias', format: val => val != null ? val.toFixed(0) : 'N/A' },
-                { key: 'total_weeks_used', label: 'Training Weeks', format: val => val != null ? val.toString() : 'N/A' },
-                { key: 'regressors_used', label: 'Price Regressors', format: val => val != null ? val.toString() : 'N/A' }
+                { key: 'total_weeks_used', label: 'Training Weeks', format: val => val != null ? val.toString() : 'N/A' }
             ];
             
             metricsConfig.forEach(config => {
@@ -767,15 +1012,6 @@
                 <div class="label">Evaluation Period</div>
             `;
             grid.appendChild(periodItem);
-            
-            // Number of weeks evaluated
-            const weeksItem = document.createElement('div');
-            weeksItem.className = 'comparison-item';
-            weeksItem.innerHTML = `
-                <div class="value">${comparison.weeks.length}</div>
-                <div class="label">Weeks Compared</div>
-            `;
-            grid.appendChild(weeksItem);
             
             section.style.display = 'block';
         }
@@ -921,7 +1157,7 @@
                                     <strong>Total Ingredients:</strong> ${Math.ceil(totalPredicted * 1.1).toLocaleString()} portions
                                 </div>
                                 <div class="action-item">
-                                    <strong>Budget Impact:</strong> ~${Math.round(totalPredicted * 15).toLocaleString()}
+                                    <strong>Budget Impact:</strong> ~€${Math.round(totalPredicted * 15).toLocaleString()}
                                 </div>
                             </div>
                         </div>
@@ -933,6 +1169,7 @@
                             <li><strong>Order ingredients for ${Math.ceil(totalPredicted * 1.1).toLocaleString()} portions</strong> (10% safety buffer included)</li>
                             <li><strong>Schedule ${Math.ceil(totalPredicted / 50)} total prep hours</strong> across the forecast period</li>
                             <li><strong>Monitor daily orders</strong> to adjust if trending toward upper/lower bounds</li>
+                            <li><strong>Consider Prophet model</strong> for cost optimization - analyze with business cost feature</li>
                         </ul>
                     </div>
                 `;
@@ -1589,6 +1826,26 @@
                 insights.push(`🎯 Baseline uses "same week last year" - Prophet learns complex patterns and seasonality`);
             }
             
+            // Add business cost insights if available
+            if (currentBusinessCost) {
+                const savings = currentBusinessCost.cost_savings_euro;
+                const weeklySavings = currentBusinessCost.avg_weekly_savings_euro;
+                const annualSavings = currentBusinessCost.annual_savings_estimate_euro;
+                
+                if (savings > 0) {
+                    insights.push(`💰 Prophet saves €${savings.toFixed(2)} vs baseline over ${currentBusinessCost.weeks_analyzed} test weeks`);
+                    insights.push(`📅 Weekly benefit: €${weeklySavings.toFixed(2)} saved per week compared to naive forecasting`);
+                    insights.push(`📈 Annual impact: €${annualSavings.toLocaleString()} saved by avoiding baseline's poor predictions`);
+                    insights.push(`🎯 Clear financial advantage: Prophet significantly outperforms "same week last year" approach`);
+                } else {
+                    insights.push(`❌ Prophet costs €${Math.abs(savings).toFixed(2)} more than baseline - model needs improvement`);
+                    insights.push(`📉 Weekly impact: €${Math.abs(weeklySavings).toFixed(2)} additional cost per week vs simple baseline`);
+                    insights.push(`⚠️ Recommendation: Baseline "same week last year" method performs better financially`);
+                }
+                
+                insights.push(`🍽️ Analysis includes real food waste costs and emergency procurement penalties`);
+            }
+            
             if (currentForecast) {
                 const avgForecast = currentForecast.predicted.reduce((a, b) => a + b, 0) / currentForecast.predicted.length;
                 const totalForecast = currentForecast.predicted.reduce((a, b) => a + b, 0);
@@ -1601,8 +1858,8 @@
             insights.push(`🔄 Retrain models weekly with new sales data for optimal accuracy`);
             
             if (currentMetrics && currentMetrics.accuracy > 85) {
-                insights.push(`💰 High accuracy enables just-in-time ingredient ordering`);
-                insights.push(`📈 Consider using forecasts for pricing optimization`);
+                insights.push(`💰 High accuracy enables just-in-time ingredient ordering and cost reduction`);
+                insights.push(`📈 Consider using forecasts for pricing optimization and demand shaping`);
             }
 
             document.getElementById('insightsList').innerHTML = insights.map(insight => `<li>${insight}</li>`).join('');
