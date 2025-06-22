@@ -228,6 +228,7 @@ class FoodDemandForecaster:
             INGREDIENT_COST_RATE = 0.40  # 40% of revenue
             STORAGE_COST_RATE = 0.15     # 15% of revenue
             EMERGENCY_COST_RATE = 0.60   # 60% of revenue (150% of normal 40%)
+            OPPORTUNITY_COST_RATE = 0.02  # 2% opportunity cost for tied-up capital
             
             # Get meal information with proper key handling
             meal_info = None
@@ -237,23 +238,35 @@ class FoodDemandForecaster:
                     break
             
             if not meal_info:
-                # Default cost structure if meal not in database
-                perishable_percentage = 60.0  # Assume 60% perishable by default
-                total_kg_per_portion = 0.5    # Assume 500g per portion
-                meal_name = f"Meal {meal_id}"
-                meal_type = "Unknown"
-                print(f"⚠️ Meal {meal_id} not found in database - using default cost structure (60% perishable)")
-            else:
-                perishable_percentage = meal_info.get('perishable_percentage', 60.0)
-                total_kg_per_portion = meal_info.get('total_kg_per_portion', 0.5)
-                meal_name = meal_info.get('name', f"Meal {meal_id}")
-                meal_type = meal_info.get('type', 'Unknown')
-                print(f"✅ Using meal-specific cost structure for {meal_name}:")
-                print(f"   • {perishable_percentage:.1f}% perishable ingredients")
-                print(f"   • {total_kg_per_portion:.2f}kg per portion")
-                print(f"   • Type: {meal_type}")
+                print(f"❌ Meal {meal_id} not found in database")
+                return None
+                
+            meal_name = meal_info.get('name', f"Meal {meal_id}")
+            meal_type = meal_info.get('type', 'Unknown')
             
-            # Calculate base costs per order
+            # Extract ingredient data from database
+            original_data = meal_info.get('original_data', meal_info)
+            ingredients = original_data.get('ingredients', [])
+            kg_per_10_persons = original_data.get('kg_per_10_persons', [])
+            perishable = original_data.get('perishable', [])
+            price_distribution = original_data.get('price_distribution', [])
+            storage_m3 = original_data.get('storage_m3', [])
+            print(f"🔍 Debugging meal {meal_id}:")
+            print(f"   ingredients: {len(ingredients)} elements")
+            print(f"   kg_per_10_persons: {len(kg_per_10_persons)} elements") 
+            print(f"   perishable: {len(perishable)} elements")
+            print(f"   price_distribution: {len(price_distribution)} elements")
+            print(f"   storage_m3: {len(storage_m3)} elements")
+            print(f"   All arrays: {[len(ingredients), len(kg_per_10_persons), len(perishable), len(price_distribution), len(storage_m3)]}")
+
+            
+            # Validate arrays have same length
+            if not all(len(arr) == len(ingredients) for arr in [kg_per_10_persons, perishable, price_distribution, storage_m3]):
+                print(f"❌ Inconsistent ingredient data arrays for meal {meal_id}")
+                return None
+                
+            
+            # Calculate base costs
             ingredient_cost_per_order = avg_meal_price * INGREDIENT_COST_RATE
             storage_cost_per_order = avg_meal_price * STORAGE_COST_RATE
             
@@ -265,29 +278,27 @@ class FoodDemandForecaster:
             
             if difference > 0:  # Overprediction
                 excess_orders = difference
-                
-                # Perishable ingredients: 100% loss
-                perishable_cost = (perishable_percentage / 100) * ingredient_cost_per_order
-                perishable_penalty = excess_orders * perishable_cost
-                
-                # Non-perishable ingredients: storage costs based on volume
-                non_perishable_percentage = 100 - perishable_percentage
-                non_perishable_kg = excess_orders * total_kg_per_portion * (non_perishable_percentage / 100)
-                storage_penalty = non_perishable_kg * (storage_cost_per_order / total_kg_per_portion)
-                
-                overprediction_penalty = perishable_penalty + storage_penalty
-                
                 print(f"   📦 Overprediction: {excess_orders:.0f} orders")
-                print(f"   💸 Perishable loss: €{perishable_penalty:.2f}")
-                print(f"   🏪 Storage cost: €{storage_penalty:.2f}")
                 
+                storage_cost = excess_orders * (avg_meal_price * STORAGE_COST_RATE)
+                opportunity_cost = excess_orders * (avg_meal_price * OPPORTUNITY_COST_RATE)
+                overprediction_penalty += storage_cost + opportunity_cost
+
+                # Process each ingredient individually
+                for i, ingredient_name in enumerate(ingredients):
+
+                    is_perishable = perishable[i]
+
+                    if is_perishable:
+                        cost_percentage = price_distribution[i] / 100  # Convert to decimal
+                        ingredient_cost = excess_orders * avg_meal_price * INGREDIENT_COST_RATE * cost_percentage
+                        overprediction_penalty += ingredient_cost
+                                        
             elif difference < 0:  # Underprediction
                 shortage_orders = abs(difference)
                 
                 # Emergency procurement at 150% cost (60% instead of 40%)
-                normal_cost = shortage_orders * ingredient_cost_per_order
-                emergency_cost = shortage_orders * avg_meal_price * EMERGENCY_COST_RATE
-                underprediction_penalty = emergency_cost - normal_cost
+                underprediction_penalty = shortage_orders * ((avg_meal_price * INGREDIENT_COST_RATE) / 2)
                 
                 print(f"   📦 Underprediction: {shortage_orders:.0f} orders")
                 print(f"   🚨 Emergency cost penalty: €{underprediction_penalty:.2f}")
@@ -298,6 +309,12 @@ class FoodDemandForecaster:
             total_revenue = actual_orders * avg_meal_price
             penalty_percentage = (total_penalty / total_revenue * 100) if total_revenue > 0 else 0
             
+            # Calculate meal-level metrics for reporting
+            total_kg_per_portion = sum(kg_per_10_persons) / 10
+            perishable_cost_percentage = sum(
+                price_distribution[i] for i, is_perish in enumerate(perishable) if is_perish
+            )
+            
             return {
                 'actual_orders': int(actual_orders),
                 'predicted_orders': int(predicted_orders),
@@ -306,15 +323,26 @@ class FoodDemandForecaster:
                 'meal_name': meal_name,
                 'meal_type': meal_type,
                 'avg_meal_price': avg_meal_price,
-                'perishable_percentage': perishable_percentage,
                 'total_kg_per_portion': total_kg_per_portion,
+                'perishable_cost_percentage': perishable_cost_percentage,
+                'ingredient_count': len(ingredients),
                 'overprediction_penalty': overprediction_penalty,
                 'underprediction_penalty': underprediction_penalty,
                 'total_penalty': total_penalty,
                 'total_revenue': total_revenue,
                 'penalty_percentage': penalty_percentage,
                 'ingredient_cost_per_order': ingredient_cost_per_order,
-                'storage_cost_per_order': storage_cost_per_order
+                'storage_cost_per_order': storage_cost_per_order,
+                'ingredients_breakdown': [
+                    {
+                        'name': ingredients[i],
+                        'kg_per_portion': kg_per_10_persons[i] / 10,
+                        'is_perishable': perishable[i],
+                        'cost_percentage': price_distribution[i],
+                        'storage_m3_per_portion': storage_m3[i] / 10
+                    }
+                    for i in range(len(ingredients))
+                ]
             }
             
         except Exception as e:
@@ -322,6 +350,7 @@ class FoodDemandForecaster:
             import traceback
             traceback.print_exc()
             return None
+
     
     def evaluate_business_cost(self, model_key, custom_meal_price=None):
         """
@@ -1821,32 +1850,8 @@ class FoodDemandForecaster:
             print(f"📊 Comparing Prophet vs Baseline for {model_key}")
             print(f"📅 Evaluation period: {len(actual_values)} weeks")
             
-            # Calculate metrics for both models
-            def calculate_comparison_metrics(y_true, y_pred, model_name):
-                mae = mean_absolute_error(y_true, y_pred)
-                rmse = np.sqrt(mean_squared_error(y_true, y_pred))
-                
-                # Robust MAPE calculation
-                mask = np.abs(y_true) > np.percentile(np.abs(y_true), 5)
-                if np.sum(mask) > 0:
-                    mape = np.mean(np.abs((y_true[mask] - y_pred[mask]) / y_true[mask])) * 100
-                    mape = min(mape, 200)  # Cap at 200%
-                else:
-                    mape = 100
-                
-                accuracy = max(0, 100 - mape)
-                bias = np.mean(y_pred - y_true)
-                
-                print(f"   📈 {model_name}:")
-                print(f"      MAE: {mae:.1f}, RMSE: {rmse:.1f}, MAPE: {mape:.1f}%, Accuracy: {accuracy:.1f}%")
-                
-                return {
-                    'mae': mae, 'rmse': rmse, 'mape': mape, 
-                    'accuracy': accuracy, 'bias': bias
-                }
-            
-            prophet_metrics = calculate_comparison_metrics(actual_values, prophet_pred_values, "Prophet")
-            baseline_metrics = calculate_comparison_metrics(actual_values, baseline_predictions, "Baseline")
+            prophet_metrics = self.calculate_robust_metrics(actual_values, prophet_pred_values) #calculate_comparison_metrics(actual_values, prophet_pred_values, "Prophet")
+            baseline_metrics = self.calculate_robust_metrics(actual_values, baseline_predictions)#calculate_comparison_metrics(actual_values, baseline_predictions, "Baseline")
             
             # Calculate improvement
             accuracy_improvement = prophet_metrics['accuracy'] - baseline_metrics['accuracy']
