@@ -241,6 +241,28 @@
         .performance-item .label { 
             font-size: 0.9rem; color: #4a7c59; margin-top: 5px; font-weight: 500;
         }
+        .performance-item.prophet-mae {
+            border: 2px solid #0066CC;
+            background: rgba(0, 102, 204, 0.1);
+        }
+        .performance-item.baseline-mae {
+            border: 2px solid #FF3300;
+            background: rgba(255, 51, 0, 0.1);
+        }
+        .performance-item.mae-improvement {
+            border: 2px solid #4a7c59;
+            background: rgba(74, 124, 89, 0.1);
+        }
+        .performance-item.business-impact {
+            border: 2px solid #9900CC;
+            background: rgba(153, 0, 204, 0.1);
+        }
+        .performance-item .value.positive {
+            color: #2d5738;
+        }
+        .performance-item .value.negative {
+            color: #d63031;
+        }
         
         .comparison-section {
             background: linear-gradient(135deg, #2d5738, #4a7c59);
@@ -455,8 +477,8 @@
         </div>
 
         <div class="performance-section" id="performanceSection" style="display: none;">
-            <h3>🎯 Model Performance Evaluation</h3>
-            <p>Performance metrics using train data split evaluation:</p>
+            <h3>Model Performance Comparison</h3>
+            <p>Prediction accuracy in business terms - lower error means better inventory planning:</p>
             <div class="performance-grid" id="performanceGrid"></div>
         </div>
 
@@ -1045,32 +1067,41 @@
             const title = section.querySelector('h3');
             if (metrics.meal_id) {
                 const mealName = metrics.meal_name || `Meal ${metrics.meal_id}`;
-                title.textContent = `🎯 Model Performance Evaluation - ${mealName}${metrics.region_id ? ` (${metrics.region_id})` : ''}`;
+                title.textContent = `Model Performance Comparison - ${mealName}${metrics.region_id ? ` (${metrics.region_id})` : ''}`;
             }
             
-            const metricsConfig = [
-                { key: 'accuracy', label: 'Accuracy', format: val => val != null ? val.toFixed(1) + '%' : 'N/A' },
-                { key: 'mae', label: 'MAE', format: val => val != null ? val.toFixed(0) : 'N/A' },
-                { key: 'rmse', label: 'RMSE', format: val => val != null ? val.toFixed(0) : 'N/A' },
-                { key: 'r2', label: 'R² Score', format: val => val != null ? val.toFixed(3) : 'N/A' },
-                { key: 'mape', label: 'MAPE', format: val => val != null ? val.toFixed(1) + '%' : 'N/A' },
-                { key: 'total_weeks_used', label: 'Training Weeks', format: val => val != null ? val.toString() : 'N/A' }
-            ];
+            // Show Prophet MAE
+            const prophetMaeItem = document.createElement('div');
+            prophetMaeItem.className = 'performance-item';
+            const prophetMae = metrics.mae != null ? Math.round(metrics.mae) : 'N/A';
+            prophetMaeItem.innerHTML = `
+                <div class="value">${prophetMae}</div>
+                <div class="label">Prophet MAE<br><small>Avg prediction error (orders)</small></div>
+            `;
+            grid.appendChild(prophetMaeItem);
             
-            metricsConfig.forEach(config => {
-                const item = document.createElement('div');
-                item.className = 'performance-item';
-                const value = metrics[config.key];
-                item.innerHTML = `<div class="value">${config.format(value)}</div><div class="label">${config.label}</div>`;
-                grid.appendChild(item);
-            });
-            
-            if (metrics.evaluation_weeks) {
-                const evalItem = document.createElement('div');
-                evalItem.className = 'performance-item';
-                evalItem.innerHTML = `<div class="value">${metrics.evaluation_weeks}</div><div class="label">Evaluation Period</div>`;
-                grid.appendChild(evalItem);
+            // Show baseline MAE if available
+            if (currentComparison && currentComparison.baseline_metrics) {
+                const baselineMae = Math.round(currentComparison.baseline_metrics.mae || 0);
+                
+                const baselineMaeItem = document.createElement('div');
+                baselineMaeItem.className = 'performance-item';
+                baselineMaeItem.innerHTML = `
+                    <div class="value">${baselineMae}</div>
+                    <div class="label">Baseline MAE<br><small>("Same week last year")</small></div>
+                `;
+                grid.appendChild(baselineMaeItem);
             }
+            
+            // Show Prophet accuracy
+            const accuracyItem = document.createElement('div');
+            accuracyItem.className = 'performance-item';
+            const accuracy = metrics.accuracy != null ? metrics.accuracy.toFixed(1) + '%' : 'N/A';
+            accuracyItem.innerHTML = `
+                <div class="value">${accuracy}</div>
+                <div class="label">Prophet Accuracy</div>
+            `;
+            grid.appendChild(accuracyItem);
             
             section.style.display = 'block';
         }
@@ -2009,6 +2040,9 @@
             console.error('Unhandled promise rejection:', event.reason);
             showError('Promise rejection', event.reason.toString());
         });
+    </script>
+</body>
+</html>
     </script>
 </body>
 </html>
