@@ -833,10 +833,6 @@
                 
                 await loadTrainingPerformance(currentModel);
                 
-                if (trainData.metrics) {
-                    showPerformanceSection(trainData.metrics);
-                }
-                
                 // Step 2: Generate forecast
                 const weeks = document.getElementById('forecastWeeks').value;
                 const confidence = document.getElementById('confidence').value;
@@ -863,6 +859,16 @@
                 if (comparisonData.success) {
                     currentComparison = comparisonData.comparison;
                     showComparisonSection(comparisonData.comparison);
+                    
+                    // *** ADD THIS LINE: Update performance section now that we have comparison data ***
+                    if (trainData.metrics) {
+                        showPerformanceSection(trainData.metrics);
+                    }
+                }
+                
+                // Show initial performance section (without baseline MAE)
+                if (trainData.metrics) {
+                    showPerformanceSection(trainData.metrics);
                 }
                 
                 // Step 4: Handle automatic business cost analysis from forecast response
@@ -911,61 +917,67 @@
             // Update title with meal information
             const title = costSection.querySelector('h3');
             const mealName = businessData.meal_name || `Meal ${businessData.meal_id}`;
-            title.textContent = `💰 Financial Impact: Prophet vs Baseline for ${mealName}`;
+            title.textContent = `Financial Impact: Prophet vs Baseline for ${mealName}`;
             
-            // Update description to focus on savings
+            // Update description
             const description = costSection.querySelector('p');
-            description.textContent = 'Money saved (or lost) by using Prophet instead of naive "same week last year" forecasting';
+            description.textContent = 'Key financial metrics comparing Prophet to baseline forecasting';
             
-            const isSaving = businessData.cost_savings_euro >= 0;
-            const savingsSign = isSaving ? '+' : '';
-            const impactIcon = isSaving ? '💰' : '❌';
-            const impactLabel = isSaving ? 'Money Saved' : 'Additional Cost';
-            const impactDescription = isSaving ? 
-                `Saved by avoiding baseline's poor predictions` : 
-                `Lost due to Prophet being worse than baseline`;
+            const isSaving = businessData.avg_weekly_savings_euro >= 0;
+            const savingsIcon = isSaving ? '💰' : '💸';
             
-            // Main financial impact
-            const impactCard = document.createElement('div');
-            impactCard.className = isSaving ? 'cost-card savings' : 'cost-card cost-loss';
-            impactCard.innerHTML = `
-                <div class="cost-value">${impactIcon} ${savingsSign}€${Math.abs(businessData.cost_savings_euro).toFixed(2)}</div>
-                <div class="cost-label">${impactLabel}</div>
-                <div class="cost-description">${impactDescription} over ${businessData.weeks_analyzed} test weeks</div>
+            // Format large numbers to be more readable (millions)
+            const weeklyAmount = Math.abs(businessData.avg_weekly_savings_euro);
+            let formattedWeekly;
+            if (weeklyAmount >= 1000000) {
+                formattedWeekly = `€${(weeklyAmount / 1000000).toFixed(1)}M`;
+            } else if (weeklyAmount >= 1000) {
+                formattedWeekly = `€${(weeklyAmount / 1000).toFixed(0)}K`;
+            } else {
+                formattedWeekly = `€${weeklyAmount.toFixed(0)}`;
+            }
+            
+            // Add minus sign for losses
+            const signedWeekly = isSaving ? formattedWeekly : `-${formattedWeekly}`;
+            
+            // Weekly savings/losses
+            const weeklySavingsCard = document.createElement('div');
+            weeklySavingsCard.className = isSaving ? 'cost-card savings' : 'cost-card cost-loss';
+            const labelText = isSaving ? 'Weekly Savings' : 'Weekly Loss';
+            weeklySavingsCard.innerHTML = `
+                <div class="cost-value">${savingsIcon} ${signedWeekly}</div>
+                <div class="cost-label">${labelText}</div>
+                <div class="cost-description">Average impact per week</div>
             `;
-            costGrid.appendChild(impactCard);
+            costGrid.appendChild(weeklySavingsCard);
             
-            // Percentage improvement
+            // Cost improvement percentage
             const percentCard = document.createElement('div');
-            percentCard.className = 'cost-card';
+            percentCard.className = businessData.cost_savings_percentage >= 0 ? 'cost-card savings' : 'cost-card cost-loss';
             const percentSign = businessData.cost_savings_percentage >= 0 ? '+' : '';
             const percentIcon = businessData.cost_savings_percentage >= 0 ? '📈' : '📉';
             percentCard.innerHTML = `
                 <div class="cost-value">${percentIcon} ${percentSign}${businessData.cost_savings_percentage.toFixed(1)}%</div>
                 <div class="cost-label">Cost Improvement</div>
-                <div class="cost-description">Compared to baseline approach</div>
+                <div class="cost-description">vs baseline approach</div>
             `;
             costGrid.appendChild(percentCard);
             
-            // Decision recommendation
-            const recommendCard = document.createElement('div');
-            recommendCard.className = isSaving ? 'cost-card prophet' : 'cost-card baseline';
-            const recommendation = isSaving ? 'Use Prophet' : 'Reconsider Prophet';
-            const recommendIcon = isSaving ? '✅' : '⚠️';
-            const recommendDesc = isSaving ? 
-                'Prophet clearly outperforms baseline' : 
-                'Baseline performs better - review model';
-            recommendCard.innerHTML = `
-                <div class="cost-value">${recommendIcon} ${recommendation}</div>
-                <div class="cost-label">Recommendation</div>
-                <div class="cost-description">${recommendDesc}</div>
+            // Test period
+            const testPeriodCard = document.createElement('div');
+            testPeriodCard.className = 'cost-card';
+            testPeriodCard.innerHTML = `
+                <div class="cost-value">📊 ${businessData.weeks_analyzed}</div>
+                <div class="cost-label">Weeks Tested</div>
+                <div class="cost-description">Real historical data</div>
             `;
-            costGrid.appendChild(recommendCard);
+            costGrid.appendChild(testPeriodCard);
             
             costSection.style.display = 'block';
             
-            // Show weekly cost analysis
-            showWeeklyCostAnalysis(businessData);
+            // Hide the weekly cost section since we're consolidating
+            const weeklySection = document.getElementById('weeklyCostSection');
+            weeklySection.style.display = 'none';
         }
 
         function showWeeklyCostAnalysis(businessData) {

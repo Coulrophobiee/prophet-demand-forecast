@@ -1780,6 +1780,38 @@ class FoodDemandForecaster:
                 
                 baseline_weeks.append(current_week)
             
+            print(f"✅ Naive baseline created: {len(baseline_predictions)} predictions")
+            
+            # DEBUG CODE - ADD THIS SECTION
+            print(f"📊 Baseline prediction stats:")
+            print(f"   Min: {np.min(baseline_predictions):.0f}")
+            print(f"   Max: {np.max(baseline_predictions):.0f}")  
+            print(f"   Mean: {np.mean(baseline_predictions):.0f}")
+            print(f"   Std: {np.std(baseline_predictions):.0f}")
+
+            # Check for extreme outliers
+            actual_demands = demands[eval_start_idx:]  # Corresponding actual values
+            errors = np.abs(baseline_predictions - actual_demands)
+            print(f"📈 Prediction errors:")
+            print(f"   Max error: {np.max(errors):.0f}")
+            print(f"   Mean error (MAE): {np.mean(errors):.0f}")
+            print(f"   Median error: {np.median(errors):.0f}")
+
+            # Show worst predictions
+            worst_idx = np.argmax(errors)
+            print(f"🔥 Worst prediction:")
+            print(f"   Week: {baseline_weeks[worst_idx]}")
+            print(f"   Predicted: {baseline_predictions[worst_idx]:.0f}")
+            print(f"   Actual: {actual_demands[worst_idx]:.0f}")
+            print(f"   Error: {errors[worst_idx]:.0f}")
+            
+            # Show a few more bad predictions
+            error_indices = np.argsort(errors)[::-1][:5]  # Top 5 worst errors
+            print(f"📉 Top 5 worst predictions:")
+            for idx in error_indices:
+                print(f"   Week {baseline_weeks[idx]}: Pred={baseline_predictions[idx]:.0f}, Actual={actual_demands[idx]:.0f}, Error={errors[idx]:.0f}")
+            # END DEBUG CODE
+            
             # Store baseline model results
             baseline_model = {
                 'predictions': np.array(baseline_predictions),
@@ -1792,12 +1824,12 @@ class FoodDemandForecaster:
             self.baseline_models = getattr(self, 'baseline_models', {})
             self.baseline_models[model_key] = baseline_model
             
-            print(f"✅ Naive baseline created: {len(baseline_predictions)} predictions")
             return baseline_model, f"Baseline model created using same-week-last-year approach"
             
         except Exception as e:
             print(f"❌ Error creating baseline model: {e}")
             return None, f"Error creating baseline: {str(e)}"
+        
 
     def evaluate_baseline_vs_prophet(self, model_key):
         """Compare Prophet model performance against naive baseline"""
