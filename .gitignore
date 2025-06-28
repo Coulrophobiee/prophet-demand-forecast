@@ -3,6 +3,11 @@
 data/
 datasets/
 
+meal_database_old.json
+examples.txt
+phils_notebook.ipynb
+.gitignore
+
 # Python
 __pycache__/
 *.py[cod]
