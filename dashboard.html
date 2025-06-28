@@ -97,23 +97,6 @@
             box-shadow: 0 12px 25px rgba(225, 112, 85, 0.4);
         }
         .btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
-        .metrics {
-            display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 20px; margin-bottom: 30px;
-        }
-        .metric-card {
-            background: linear-gradient(135deg, #2d5738, #4a7c59);
-            color: white; padding: 25px; border-radius: 15px; text-align: center;
-            box-shadow: 0 10px 30px rgba(45, 87, 56, 0.3); transition: transform 0.3s ease;
-        }
-        .metric-card:hover { transform: translateY(-5px); }
-        .metric-card h3 { 
-            font-size: 2.5rem; margin-bottom: 10px; font-weight: 700; 
-            color: #ffffff; text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
-        }
-        .metric-card p { 
-            font-size: 1.1rem; color: #ffffff; text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
-        }
         
         /* Financial Impact Analysis Styles */
         .business-cost-section {
@@ -158,50 +141,10 @@
             text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
         }
         
-        /* Weekly Financial Impact Styles */
-        .weekly-cost-section {
-            background: linear-gradient(135deg, #2d5738, #4a7c59);
-            color: white; padding: 25px; border-radius: 15px; margin-bottom: 30px;
-            box-shadow: 0 10px 30px rgba(45, 87, 56, 0.3);
-        }
-        .weekly-cost-section h3 { 
-            color: #ffffff; text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
-        }
-        .weekly-cost-section p { 
-            color: #ffffff; text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
-        }
-        .weekly-cost-grid {
-            display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 20px; margin: 20px 0;
-        }
-        .weekly-cost-item {
-            text-align: center; padding: 20px;
-            background: rgba(255, 255, 255, 0.25); border-radius: 12px;
-            backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.3);
-        }
-        .weekly-cost-item.savings { 
-            border: 2px solid rgba(76, 175, 80, 0.9);
-            background: rgba(76, 175, 80, 0.25);
-        }
-        .weekly-cost-item.cost-loss { 
-            border: 2px solid rgba(244, 67, 54, 0.9);
-            background: rgba(244, 67, 54, 0.25);
-        }
-        .weekly-cost-value { 
-            font-size: 2rem; font-weight: bold; margin-bottom: 5px; 
-            color: #ffffff; text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
-        }
-        .weekly-cost-label { 
-            font-size: 1rem; color: #ffffff; font-weight: 500;
-            text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
-        }
-        .weekly-cost-description { 
-            font-size: 0.85rem; margin-top: 8px; color: #ffffff;
-            text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
-        }
+        /* Weekly Financial Impact Styles - REMOVED */
         
         .charts {
-            display: grid; grid-template-columns: 1fr 1fr;
+            display: grid; grid-template-columns: 1fr;
             gap: 30px; margin-bottom: 30px;
         }
         .chart-container {
@@ -264,47 +207,7 @@
             color: #d63031;
         }
         
-        .comparison-section {
-            background: linear-gradient(135deg, #2d5738, #4a7c59);
-            color: white; padding: 25px; border-radius: 15px;
-            margin-bottom: 30px; box-shadow: 0 10px 30px rgba(45, 87, 56, 0.3);
-        }
-        .comparison-section h3 { 
-            margin-bottom: 15px; font-size: 1.5rem; 
-            color: #ffffff; text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
-        }
-        .comparison-section p { 
-            color: #ffffff; text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
-        }
-        .comparison-grid {
-            display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 20px; margin-top: 20px;
-        }
-        .comparison-item {
-            text-align: center; padding: 20px;
-            background: rgba(255, 255, 255, 0.25); border-radius: 10px;
-            backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.3);
-        }
-        .comparison-item .value { 
-            font-size: 2rem; font-weight: bold; margin-bottom: 5px; 
-            color: #ffffff; text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
-        }
-        .comparison-item .label { 
-            font-size: 1rem; color: #ffffff; font-weight: 500;
-            text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
-        }
-        .comparison-item.prophet { 
-            border: 2px solid rgba(102, 204, 255, 0.8);
-            background: rgba(102, 204, 255, 0.2);
-        }
-        .comparison-item.baseline { 
-            border: 2px solid rgba(255, 255, 255, 0.8);
-            background: rgba(255, 255, 255, 0.2);
-        }
-        .comparison-item.improvement { 
-            border: 2px solid rgba(255, 215, 0, 0.9);
-            background: rgba(255, 215, 0, 0.25);
-        }
+        /* Comparison section styles - REMOVED since consolidated into performance section */
         
         .loading { display: none; text-align: center; padding: 20px; }
         .spinner {
@@ -462,64 +365,30 @@
             <p>Training Prophet model, generating forecast, and calculating financial impact...</p>
         </div>
 
-        <!-- Financial Impact Analysis Section -->
-        <div class="business-cost-section" id="businessCostSection" style="display: none;">
-            <h3>💰 Financial Impact: Prophet vs Baseline</h3>
-            <p>Money saved (or lost) by using Prophet instead of naive "same week last year" forecasting</p>
-            <div class="cost-comparison-grid" id="costComparisonGrid"></div>
+        <!-- Charts Section - Moved to top -->
+        <div class="charts" id="chartsSection" style="display: none;">
+            <div class="chart-container full-width">
+                <h3>Prophet Regional Demand Forecast</h3>
+                <canvas id="forecastChart"></canvas>
+            </div>
+            <div class="chart-container full-width">
+                <h3 id="trainingPerformanceTitle">Prophet vs Baseline Comparison</h3>
+                <canvas id="accuracyChart"></canvas>
+            </div>
         </div>
 
-        <!-- Weekly Financial Impact Section -->
-        <div class="weekly-cost-section" id="weeklyCostSection" style="display: none;">
-            <h3>📅 Weekly Financial Impact</h3>
-            <p>Average weekly savings (or losses) from using Prophet instead of baseline forecasting</p>
-            <div class="weekly-cost-grid" id="weeklyCostGrid"></div>
-        </div>
-
+        <!-- Simplified Model Performance Section -->
         <div class="performance-section" id="performanceSection" style="display: none;">
             <h3>Model Performance Comparison</h3>
             <p>Prediction accuracy in business terms - lower error means better inventory planning:</p>
             <div class="performance-grid" id="performanceGrid"></div>
         </div>
 
-        <div class="comparison-section" id="comparisonSection" style="display: none;">
-            <h3>🥊 Prophet vs Baseline Model Comparison</h3>
-            <p>Comparing Prophet against a naive "same week last year" baseline model:</p>
-            <div class="comparison-grid" id="comparisonGrid"></div>
-        </div>
-
-        <div class="metrics" id="metricsContainer" style="display: none;">
-            <div class="metric-card">
-                <h3 id="modelAccuracy">-</h3>
-                <p>Prophet Accuracy</p>
-            </div>
-            <div class="metric-card">
-                <h3 id="avgDemand">-</h3>
-                <p>Avg Predicted Demand</p>
-            </div>
-            <div class="metric-card">
-                <h3 id="totalForecast">-</h3>
-                <p>Total Forecast</p>
-            </div>
-            <div class="metric-card">
-                <h3 id="confidenceLevel">95%</h3>
-                <p>Confidence Level</p>
-            </div>
-        </div>
-
-        <div class="charts">
-            <div class="chart-container full-width">
-                <h3>Prophet Regional Demand Forecast</h3>
-                <canvas id="forecastChart"></canvas>
-            </div>
-            <div class="chart-container">
-                <h3>Model Performance Radar</h3>
-                <canvas id="performanceChart"></canvas>
-            </div>
-            <div class="chart-container">
-                <h3 id="trainingPerformanceTitle">Prophet vs Baseline Comparison</h3>
-                <canvas id="accuracyChart"></canvas>
-            </div>
+        <!-- Financial Impact Analysis Section -->
+        <div class="business-cost-section" id="businessCostSection" style="display: none;">
+            <h3>💰 Financial Impact: Prophet vs Baseline</h3>
+            <p>Money saved (or lost) by using Prophet instead of naive "same week last year" forecasting</p>
+            <div class="cost-comparison-grid" id="costComparisonGrid"></div>
         </div>
     </div>
 
@@ -528,7 +397,7 @@
         let currentTrainingPerformance = null, currentComparison = null;
         let currentBusinessCost = null;
         let dataAvailability = null;
-        let forecastChart = null, performanceChart = null, accuracyChart = null;
+        let forecastChart = null, accuracyChart = null;
         
         // User selection preservation
         let userSelections = {
@@ -541,10 +410,15 @@
 
         // Store user selections whenever they change
         function storeUserSelections() {
-            userSelections.meal = document.getElementById('mealSelect').value;
-            userSelections.region = document.getElementById('regionSelect').value;
-            userSelections.forecastWeeks = document.getElementById('forecastWeeks').value;
-            userSelections.confidence = document.getElementById('confidence').value;
+            const mealSelect = document.getElementById('mealSelect');
+            const regionSelect = document.getElementById('regionSelect');
+            const forecastWeeks = document.getElementById('forecastWeeks');
+            const confidence = document.getElementById('confidence');
+            
+            if (mealSelect) userSelections.meal = mealSelect.value;
+            if (regionSelect) userSelections.region = regionSelect.value;
+            if (forecastWeeks) userSelections.forecastWeeks = forecastWeeks.value;
+            if (confidence) userSelections.confidence = confidence.value;
         }
 
         // Restore user selections after dropdown population
@@ -560,20 +434,20 @@
             const confidence = document.getElementById('confidence');
             
             // Restore selections if options exist
-            if (userSelections.meal && Array.from(mealSelect.options).some(opt => opt.value === userSelections.meal)) {
+            if (mealSelect && userSelections.meal && Array.from(mealSelect.options).some(opt => opt.value === userSelections.meal)) {
                 mealSelect.value = userSelections.meal;
                 mealSelect.classList.add('selection-preserved');
                 setTimeout(() => mealSelect.classList.remove('selection-preserved'), 2000);
             }
             
-            if (userSelections.region && Array.from(regionSelect.options).some(opt => opt.value === userSelections.region)) {
+            if (regionSelect && userSelections.region && Array.from(regionSelect.options).some(opt => opt.value === userSelections.region)) {
                 regionSelect.value = userSelections.region;
                 regionSelect.classList.add('selection-preserved');
                 setTimeout(() => regionSelect.classList.remove('selection-preserved'), 2000);
             }
             
-            forecastWeeks.value = userSelections.forecastWeeks;
-            confidence.value = userSelections.confidence;
+            if (forecastWeeks) forecastWeeks.value = userSelections.forecastWeeks;
+            if (confidence) confidence.value = userSelections.confidence;
             
             // Update selection info after restoration
             updateSelectionInfo();
@@ -858,9 +732,8 @@
                 
                 if (comparisonData.success) {
                     currentComparison = comparisonData.comparison;
-                    showComparisonSection(comparisonData.comparison);
                     
-                    // *** ADD THIS LINE: Update performance section now that we have comparison data ***
+                    // Update performance section now that we have comparison data
                     if (trainData.metrics) {
                         showPerformanceSection(trainData.metrics);
                     }
@@ -974,84 +847,9 @@
             costGrid.appendChild(testPeriodCard);
             
             costSection.style.display = 'block';
-            
-            // Hide the weekly cost section since we're consolidating
-            const weeklySection = document.getElementById('weeklyCostSection');
-            weeklySection.style.display = 'none';
         }
 
-        function showWeeklyCostAnalysis(businessData) {
-            const weeklySection = document.getElementById('weeklyCostSection');
-            const weeklyGrid = document.getElementById('weeklyCostGrid');
-            weeklyGrid.innerHTML = '';
-            
-            // Update title and description to focus on savings
-            const title = weeklySection.querySelector('h3');
-            title.textContent = '📅 Weekly Financial Impact';
-            
-            const description = weeklySection.querySelector('p');
-            description.textContent = 'Average weekly savings (or losses) from using Prophet instead of baseline forecasting';
-            
-            const isSaving = businessData.avg_weekly_savings_euro >= 0;
-            const savingsSign = isSaving ? '+' : '';
-            const savingsIcon = isSaving ? '💰' : '💸';
-            
-            // Weekly impact (main metric)
-            const weeklyImpactItem = document.createElement('div');
-            weeklyImpactItem.className = isSaving ? 'weekly-cost-item savings' : 'weekly-cost-item cost-loss';
-            weeklyImpactItem.innerHTML = `
-                <div class="weekly-cost-value">${savingsIcon} ${savingsSign}€${Math.abs(businessData.avg_weekly_savings_euro).toFixed(2)}</div>
-                <div class="weekly-cost-label">${isSaving ? 'Weekly Savings' : 'Weekly Loss'}</div>
-                <div class="weekly-cost-description">${isSaving ? 'Money saved each week with Prophet' : 'Money lost each week vs baseline'}</div>
-            `;
-            weeklyGrid.appendChild(weeklyImpactItem);
-            
-            // Annual projection
-            const annualImpact = businessData.annual_savings_estimate_euro;
-            const annualIsSaving = annualImpact >= 0;
-            const annualSign = annualIsSaving ? '+' : '';
-            const annualIcon = annualIsSaving ? '📈' : '📉';
-            
-            const annualItem = document.createElement('div');
-            annualItem.className = annualIsSaving ? 'weekly-cost-item' : 'weekly-cost-item cost-loss';
-            annualItem.innerHTML = `
-                <div class="weekly-cost-value">${annualIcon} ${annualSign}€${Math.abs(annualImpact).toLocaleString()}</div>
-                <div class="weekly-cost-label">${annualIsSaving ? 'Annual Savings' : 'Annual Loss'}</div>
-                <div class="weekly-cost-description">Projected yearly impact (52 weeks)</div>
-            `;
-            weeklyGrid.appendChild(annualItem);
-            
-            // Test period context
-            const testPeriodItem = document.createElement('div');
-            testPeriodItem.className = 'weekly-cost-item';
-            testPeriodItem.innerHTML = `
-                <div class="weekly-cost-value">📊 ${businessData.weeks_analyzed}</div>
-                <div class="weekly-cost-label">Test Weeks</div>
-                <div class="weekly-cost-description">Real historical comparison period</div>
-            `;
-            weeklyGrid.appendChild(testPeriodItem);
-            
-            // Business insight
-            const insightItem = document.createElement('div');
-            insightItem.className = 'weekly-cost-item';
-            const insightText = isSaving ? 
-                (businessData.avg_weekly_savings_euro > 50 ? 'Significant Impact' : 'Moderate Impact') :
-                'Needs Review';
-            const insightIcon = isSaving ? 
-                (businessData.avg_weekly_savings_euro > 50 ? '🎯' : '👍') : '⚠️';
-            const insightDesc = isSaving ?
-                (businessData.avg_weekly_savings_euro > 50 ? 'High value from Prophet forecasting' : 'Positive but modest improvement') :
-                'Consider model improvements';
-                
-            insightItem.innerHTML = `
-                <div class="weekly-cost-value">${insightIcon} ${insightText}</div>
-                <div class="weekly-cost-label">Business Impact</div>
-                <div class="weekly-cost-description">${insightDesc}</div>
-            `;
-            weeklyGrid.appendChild(insightItem);
-            
-            weeklySection.style.display = 'block';
-        }
+        /* showWeeklyCostAnalysis function removed - not used in simplified structure */
 
         async function loadTrainingPerformance(modelKey) {
             try {
@@ -1082,19 +880,41 @@
                 title.textContent = `Model Performance Comparison - ${mealName}${metrics.region_id ? ` (${metrics.region_id})` : ''}`;
             }
             
+            // Show Prophet Accuracy
+            const prophetAccuracyItem = document.createElement('div');
+            prophetAccuracyItem.className = 'performance-item';
+            const accuracy = metrics.accuracy != null ? metrics.accuracy.toFixed(1) + '%' : 'N/A';
+            prophetAccuracyItem.innerHTML = `
+                <div class="value">${accuracy}</div>
+                <div class="label">Prophet Accuracy</div>
+            `;
+            grid.appendChild(prophetAccuracyItem);
+            
+            // Show Baseline Accuracy if available
+            if (currentComparison && currentComparison.baseline_metrics) {
+                const baselineAccuracyItem = document.createElement('div');
+                baselineAccuracyItem.className = 'performance-item';
+                const baselineAccuracy = currentComparison.baseline_metrics.accuracy.toFixed(1) + '%';
+                baselineAccuracyItem.innerHTML = `
+                    <div class="value">${baselineAccuracy}</div>
+                    <div class="label">Baseline Accuracy<br><small>("Same week last year")</small></div>
+                `;
+                grid.appendChild(baselineAccuracyItem);
+            }
+            
             // Show Prophet MAE
             const prophetMaeItem = document.createElement('div');
             prophetMaeItem.className = 'performance-item';
-            const prophetMae = metrics.mae != null ? Math.round(metrics.mae) : 'N/A';
+            const prophetMae = metrics.mae != null ? Math.round(metrics.mae).toLocaleString() : 'N/A';
             prophetMaeItem.innerHTML = `
                 <div class="value">${prophetMae}</div>
                 <div class="label">Prophet MAE<br><small>Avg prediction error (orders)</small></div>
             `;
             grid.appendChild(prophetMaeItem);
             
-            // Show baseline MAE if available
+            // Show Baseline MAE if available
             if (currentComparison && currentComparison.baseline_metrics) {
-                const baselineMae = Math.round(currentComparison.baseline_metrics.mae || 0);
+                const baselineMae = Math.round(currentComparison.baseline_metrics.mae || 0).toLocaleString();
                 
                 const baselineMaeItem = document.createElement('div');
                 baselineMaeItem.className = 'performance-item';
@@ -1105,111 +925,13 @@
                 grid.appendChild(baselineMaeItem);
             }
             
-            // Show Prophet accuracy
-            const accuracyItem = document.createElement('div');
-            accuracyItem.className = 'performance-item';
-            const accuracy = metrics.accuracy != null ? metrics.accuracy.toFixed(1) + '%' : 'N/A';
-            accuracyItem.innerHTML = `
-                <div class="value">${accuracy}</div>
-                <div class="label">Prophet Accuracy</div>
-            `;
-            grid.appendChild(accuracyItem);
-            
-            section.style.display = 'block';
-        }
-
-        function showComparisonSection(comparison) {
-            if (!comparison) return;
-            
-            const section = document.getElementById('comparisonSection');
-            const grid = document.getElementById('comparisonGrid');
-            grid.innerHTML = '';
-            
-            const title = section.querySelector('h3');
-            const mealId = comparison.meal_id || 'Unknown';
-            const regionText = comparison.region_id ? ` (${comparison.region_id})` : ' (All Regions)';
-            title.textContent = `🥊 Prophet vs Baseline Comparison - Meal ${mealId}${regionText}`;
-            
-            // Prophet metrics
-            const prophetItem = document.createElement('div');
-            prophetItem.className = 'comparison-item prophet';
-            prophetItem.innerHTML = `
-                <div class="value">${comparison.prophet_metrics.accuracy.toFixed(1)}%</div>
-                <div class="label">Prophet Accuracy</div>
-            `;
-            grid.appendChild(prophetItem);
-            
-            // Baseline metrics
-            const baselineItem = document.createElement('div');
-            baselineItem.className = 'comparison-item baseline';
-            baselineItem.innerHTML = `
-                <div class="value">${comparison.baseline_metrics.accuracy.toFixed(1)}%</div>
-                <div class="label">Baseline Accuracy<br><small>("Same Week Last Year")</small></div>
-            `;
-            grid.appendChild(baselineItem);
-            
-            // Improvement
-            const improvementItem = document.createElement('div');
-            improvementItem.className = 'comparison-item improvement';
-            const improvement = comparison.accuracy_improvement;
-            const improvementSign = improvement >= 0 ? '+' : '';
-            improvementItem.innerHTML = `
-                <div class="value">${improvementSign}${improvement.toFixed(1)}%</div>
-                <div class="label">Accuracy Improvement</div>
-            `;
-            grid.appendChild(improvementItem);
-            
-            // MAE comparison
-            const maeItem = document.createElement('div');
-            maeItem.className = 'comparison-item';
-            const maeImprovement = comparison.mae_improvement;
-            const maeSign = maeImprovement >= 0 ? '+' : '';
-            maeItem.innerHTML = `
-                <div class="value">${maeSign}${maeImprovement.toFixed(1)}%</div>
-                <div class="label">MAE Improvement</div>
-            `;
-            grid.appendChild(maeItem);
-            
-            // Evaluation period
-            const periodItem = document.createElement('div');
-            periodItem.className = 'comparison-item';
-            periodItem.innerHTML = `
-                <div class="value">${comparison.eval_period}</div>
-                <div class="label">Evaluation Period</div>
-            `;
-            grid.appendChild(periodItem);
-            
             section.style.display = 'block';
         }
 
         function updateDashboard() {
             if (!currentForecast) return;
             
-            // Update metric cards
-            if (currentMetrics && currentMetrics.accuracy != null) {
-                document.getElementById('modelAccuracy').textContent = currentMetrics.accuracy.toFixed(1) + '%';
-            } else {
-                document.getElementById('modelAccuracy').textContent = 'N/A';
-            }
-            
-            const avgDemand = Math.round(currentForecast.predicted.reduce((a, b) => a + b, 0) / currentForecast.predicted.length);
-            const totalForecast = currentForecast.predicted.reduce((a, b) => a + b, 0);
-            const confidenceLevel = document.getElementById('confidence').value;
             const forecastWeeks = currentForecast.weeks.length;
-            
-            document.getElementById('avgDemand').textContent = avgDemand.toLocaleString();
-            document.getElementById('totalForecast').textContent = totalForecast.toLocaleString();
-            document.getElementById('confidenceLevel').textContent = confidenceLevel + '%';
-            
-            if (currentForecast.meal_id) {
-                const cards = document.querySelectorAll('.metric-card p');
-                if (cards.length >= 4) {
-                    cards[0].textContent = `Prophet Accuracy`;
-                    cards[1].textContent = `Avg Weekly Demand`;
-                    cards[2].textContent = `Total Forecast`;
-                    cards[3].textContent = `Confidence Level`;
-                }
-            }
             
             // Add business summary for short forecasts
             if (forecastWeeks <= 3) {
@@ -1218,13 +940,16 @@
                 removeBusinessSummary();
             }
             
-            document.getElementById('metricsContainer').style.display = 'grid';
+            // Show charts section
+            const chartsSection = document.getElementById('chartsSection');
+            if (chartsSection) {
+                chartsSection.style.display = 'grid';
+            }
             
             // Update charts
             try {
                 updateForecastChart();
-                updatePerformanceChart();
-                updateComparisonChart(); // Always show comparison chart
+                updateComparisonChart();
             } catch (error) {
                 console.error('Error updating charts:', error);
                 showError('Error updating charts', error.message);
@@ -1238,7 +963,8 @@
             const forecastWeeks = currentForecast.weeks.length;
             const mealId = currentForecast.meal_id || 'Unknown';
             const mealName = currentForecast.meal_name || `Meal ${mealId}`;
-            const confidenceLevel = document.getElementById('confidence').value;
+            const confidenceElement = document.getElementById('confidence');
+            const confidenceLevel = confidenceElement ? confidenceElement.value : '95';
             
             // Create business summary section
             const businessSummary = document.createElement('div');
@@ -1342,7 +1068,9 @@
             
             // Insert before the charts section
             const chartsSection = document.querySelector('.charts');
-            chartsSection.parentNode.insertBefore(businessSummary, chartsSection);
+            if (chartsSection && chartsSection.parentNode) {
+                chartsSection.parentNode.insertBefore(businessSummary, chartsSection);
+            }
         }
 
         function removeBusinessSummary() {
@@ -1374,9 +1102,13 @@
                 mealName = currentMetrics.meal_name;
             } else if (mealId !== 'Unknown') {
                 const mealSelect = document.getElementById('mealSelect');
-                const selectedOption = Array.from(mealSelect.options).find(opt => opt.value == mealId);
-                if (selectedOption) {
-                    mealName = selectedOption.textContent.split(' (ID:')[0];
+                if (mealSelect) {
+                    const selectedOption = Array.from(mealSelect.options).find(opt => opt.value == mealId);
+                    if (selectedOption) {
+                        mealName = selectedOption.textContent.split(' (ID:')[0];
+                    } else {
+                        mealName = `Meal ${mealId}`;
+                    }
                 } else {
                     mealName = `Meal ${mealId}`;
                 }
@@ -1609,73 +1341,6 @@
                 
             } catch (error) {
                 console.error('Error creating forecast chart:', error);
-                throw error;
-            }
-        }
-
-        function updatePerformanceChart() {
-            const ctx = document.getElementById('performanceChart');
-            if (!ctx) return;
-            
-            const chartContext = ctx.getContext('2d');
-            if (performanceChart) {
-                performanceChart.destroy();
-                performanceChart = null;
-            }
-
-            if (!currentMetrics) return;
-
-            const forecastWeeks = currentForecast.weeks.length;
-            
-            const forecastMetrics = [
-                'Model Training Accuracy',
-                'Forecast Confidence', 
-                'Data Coverage',
-                'Trend Strength'
-            ];
-            
-            const forecastValues = [
-                currentMetrics.accuracy || 0,
-                parseInt(document.getElementById('confidence').value),
-                Math.min(100, (currentMetrics.test_samples || 0) * 3),
-                Math.max(0, 100 - (currentMetrics.mape || 0))
-            ];
-
-            try {
-                performanceChart = new Chart(chartContext, {
-                    type: 'radar', 
-                    data: {
-                        labels: forecastMetrics, 
-                        datasets: [{
-                            label: `${forecastWeeks} Week Forecast Quality`,
-                            data: forecastValues,
-                            borderColor: '#4a7c59', 
-                            backgroundColor: 'rgba(74, 124, 89, 0.2)',
-                            pointBackgroundColor: '#4a7c59', 
-                            pointBorderColor: '#fff',
-                            pointHoverBackgroundColor: '#fff', 
-                            pointHoverBorderColor: '#4a7c59'
-                        }]
-                    }, 
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        scales: { 
-                            r: { 
-                                beginAtZero: true, 
-                                max: 100, 
-                                title: { display: true, text: 'Quality Score (%)' } 
-                            } 
-                        },
-                        plugins: {
-                            title: { display: true, text: `Forecast Quality Assessment` },
-                            legend: { display: true, position: 'top' }
-                        }
-                    }
-                });
-                
-            } catch (error) {
-                console.error('Error creating performance chart:', error);
                 throw error;
             }
         }
@@ -2052,9 +1717,6 @@
             console.error('Unhandled promise rejection:', event.reason);
             showError('Promise rejection', event.reason.toString());
         });
-    </script>
-</body>
-</html>
     </script>
 </body>
 </html>
