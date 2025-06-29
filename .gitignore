@@ -1,10 +1,8 @@
 # Data files
 *.csv
-data/
 datasets/
 
 meal_database_old.json
-examples.txt
 phils_notebook.ipynb
 .gitignore
 

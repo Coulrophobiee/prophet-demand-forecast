@@ -4,10 +4,10 @@ Food Demand Forecaster - Prophet Model Implementation with Business Cost Analysi
 Enhanced version with Euro-based cost evaluation for business impact assessment
 """
 
-import pandas as pd # type: ignore
-import numpy as np # type: ignore
-from prophet import Prophet # type: ignore
-from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score # type: ignore
+import pandas as pd
+import numpy as np
+from prophet import Prophet
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 import warnings
 import os
 import json
@@ -34,81 +34,82 @@ class FoodDemandForecaster:
         self.business_costs = {}
         
     def generate_meal_database(self):
-        """Generate AI-like meal database with ingredients and cost structure"""
-        print("🍽️ Generating meal database with ingredients and cost structure...")
+        # """Generate AI-like meal database with ingredients and cost structure"""
+        # print("🍽️ Generating meal database with ingredients and cost structure...")
         
-        perishable_ingredients = [
-            {'name': 'Fresh Chicken Breast', 'cost_percentage': 35, 'kg_per_portion': 0.15, 'perishable': True},
-            {'name': 'Fresh Salmon Fillet', 'cost_percentage': 45, 'kg_per_portion': 0.12, 'perishable': True},
-            {'name': 'Fresh Vegetables Mix', 'cost_percentage': 20, 'kg_per_portion': 0.20, 'perishable': True},
-            {'name': 'Fresh Herbs', 'cost_percentage': 8, 'kg_per_portion': 0.02, 'perishable': True},
-            {'name': 'Fresh Dairy Cream', 'cost_percentage': 15, 'kg_per_portion': 0.05, 'perishable': True},
-            {'name': 'Fresh Mushrooms', 'cost_percentage': 12, 'kg_per_portion': 0.08, 'perishable': True},
-            {'name': 'Fresh Tomatoes', 'cost_percentage': 10, 'kg_per_portion': 0.10, 'perishable': True},
-            {'name': 'Fresh Lettuce', 'cost_percentage': 6, 'kg_per_portion': 0.05, 'perishable': True}
-        ]
+        # perishable_ingredients = [
+        #     {'name': 'Fresh Chicken Breast', 'cost_percentage': 35, 'kg_per_portion': 0.15, 'perishable': True},
+        #     {'name': 'Fresh Salmon Fillet', 'cost_percentage': 45, 'kg_per_portion': 0.12, 'perishable': True},
+        #     {'name': 'Fresh Vegetables Mix', 'cost_percentage': 20, 'kg_per_portion': 0.20, 'perishable': True},
+        #     {'name': 'Fresh Herbs', 'cost_percentage': 8, 'kg_per_portion': 0.02, 'perishable': True},
+        #     {'name': 'Fresh Dairy Cream', 'cost_percentage': 15, 'kg_per_portion': 0.05, 'perishable': True},
+        #     {'name': 'Fresh Mushrooms', 'cost_percentage': 12, 'kg_per_portion': 0.08, 'perishable': True},
+        #     {'name': 'Fresh Tomatoes', 'cost_percentage': 10, 'kg_per_portion': 0.10, 'perishable': True},
+        #     {'name': 'Fresh Lettuce', 'cost_percentage': 6, 'kg_per_portion': 0.05, 'perishable': True}
+        # ]
         
-        non_perishable_ingredients = [
-            {'name': 'Rice', 'cost_percentage': 15, 'kg_per_portion': 0.08, 'perishable': False},
-            {'name': 'Pasta', 'cost_percentage': 12, 'kg_per_portion': 0.09, 'perishable': False},
-            {'name': 'Olive Oil', 'cost_percentage': 8, 'kg_per_portion': 0.01, 'perishable': False},
-            {'name': 'Spices Mix', 'cost_percentage': 5, 'kg_per_portion': 0.005, 'perishable': False},
-            {'name': 'Canned Tomatoes', 'cost_percentage': 10, 'kg_per_portion': 0.12, 'perishable': False},
-            {'name': 'Quinoa', 'cost_percentage': 18, 'kg_per_portion': 0.06, 'perishable': False},
-            {'name': 'Dried Beans', 'cost_percentage': 8, 'kg_per_portion': 0.07, 'perishable': False},
-            {'name': 'Flour', 'cost_percentage': 6, 'kg_per_portion': 0.05, 'perishable': False},
-            {'name': 'Coconut Milk', 'cost_percentage': 12, 'kg_per_portion': 0.04, 'perishable': False}
-        ]
+        # non_perishable_ingredients = [
+        #     {'name': 'Rice', 'cost_percentage': 15, 'kg_per_portion': 0.08, 'perishable': False},
+        #     {'name': 'Pasta', 'cost_percentage': 12, 'kg_per_portion': 0.09, 'perishable': False},
+        #     {'name': 'Olive Oil', 'cost_percentage': 8, 'kg_per_portion': 0.01, 'perishable': False},
+        #     {'name': 'Spices Mix', 'cost_percentage': 5, 'kg_per_portion': 0.005, 'perishable': False},
+        #     {'name': 'Canned Tomatoes', 'cost_percentage': 10, 'kg_per_portion': 0.12, 'perishable': False},
+        #     {'name': 'Quinoa', 'cost_percentage': 18, 'kg_per_portion': 0.06, 'perishable': False},
+        #     {'name': 'Dried Beans', 'cost_percentage': 8, 'kg_per_portion': 0.07, 'perishable': False},
+        #     {'name': 'Flour', 'cost_percentage': 6, 'kg_per_portion': 0.05, 'perishable': False},
+        #     {'name': 'Coconut Milk', 'cost_percentage': 12, 'kg_per_portion': 0.04, 'perishable': False}
+        # ]
         
-        all_ingredients = perishable_ingredients + non_perishable_ingredients
+        # all_ingredients = perishable_ingredients + non_perishable_ingredients
         
         if self.train_data is not None and 'meal_id' in self.train_data.columns:
-            unique_meals = sorted(self.train_data['meal_id'].unique())
+            print("yea")
+        #     unique_meals = sorted(self.train_data['meal_id'].unique())
             
-            for meal_id in unique_meals:
-                selected_ingredients = random.sample(all_ingredients, 5)
+        #     for meal_id in unique_meals:
+        #         selected_ingredients = random.sample(all_ingredients, 5)
                 
-                total_percentage = sum(ing['cost_percentage'] for ing in selected_ingredients)
-                normalized_ingredients = []
+        #         total_percentage = sum(ing['cost_percentage'] for ing in selected_ingredients)
+        #         normalized_ingredients = []
                 
-                for ing in selected_ingredients:
-                    normalized_ing = ing.copy()
-                    normalized_ing['cost_percentage'] = (ing['cost_percentage'] / total_percentage) * 100
-                    normalized_ingredients.append(normalized_ing)
+        #         for ing in selected_ingredients:
+        #             normalized_ing = ing.copy()
+        #             normalized_ing['cost_percentage'] = (ing['cost_percentage'] / total_percentage) * 100
+        #             normalized_ingredients.append(normalized_ing)
                 
-                perishable_percentage = sum(ing['cost_percentage'] for ing in normalized_ingredients if ing['perishable'])
-                non_perishable_percentage = sum(ing['cost_percentage'] for ing in normalized_ingredients if not ing['perishable'])
-                total_kg_per_portion = sum(ing['kg_per_portion'] for ing in normalized_ingredients)
+        #         perishable_percentage = sum(ing['cost_percentage'] for ing in normalized_ingredients if ing['perishable'])
+        #         non_perishable_percentage = sum(ing['cost_percentage'] for ing in normalized_ingredients if not ing['perishable'])
+        #         total_kg_per_portion = sum(ing['kg_per_portion'] for ing in normalized_ingredients)
                 
-                meal_name = self.get_meal_display_name(meal_id)
-                if meal_name == f"Meal {meal_id}":
-                    main_protein = next((ing['name'] for ing in normalized_ingredients if 'Chicken' in ing['name'] or 'Salmon' in ing['name']), 'Protein')
-                    main_carb = next((ing['name'] for ing in normalized_ingredients if ing['name'] in ['Rice', 'Pasta', 'Quinoa']), 'Rice')
-                    meal_name = f"{main_protein.replace('Fresh ', '')} with {main_carb}"
+        #         meal_name = self.get_meal_display_name(meal_id)
+        #         if meal_name == f"Meal {meal_id}":
+        #             main_protein = next((ing['name'] for ing in normalized_ingredients if 'Chicken' in ing['name'] or 'Salmon' in ing['name']), 'Protein')
+        #             main_carb = next((ing['name'] for ing in normalized_ingredients if ing['name'] in ['Rice', 'Pasta', 'Quinoa']), 'Rice')
+        #             meal_name = f"{main_protein.replace('Fresh ', '')} with {main_carb}"
                 
-                meal_data = {
-                    'name': meal_name,
-                    'ingredients': normalized_ingredients,
-                    'total_kg_per_portion': total_kg_per_portion,
-                    'perishable_percentage': perishable_percentage,
-                    'non_perishable_percentage': non_perishable_percentage
-                }
+        #         meal_data = {
+        #             'name': meal_name,
+        #             'ingredients': normalized_ingredients,
+        #             'total_kg_per_portion': total_kg_per_portion,
+        #             'perishable_percentage': perishable_percentage,
+        #             'non_perishable_percentage': non_perishable_percentage
+        #         }
                 
-                self.meal_database[str(meal_id)] = meal_data
-                self.meal_database[int(meal_id)] = meal_data
-                self.meal_database[meal_id] = meal_data
+        #         self.meal_database[str(meal_id)] = meal_data
+        #         self.meal_database[int(meal_id)] = meal_data
+        #         self.meal_database[meal_id] = meal_data
             
-            print(f"✅ Generated meal database for {len(unique_meals)} meals")
+        #     print(f"✅ Generated meal database for {len(unique_meals)} meals")
             
-            try:
-                json_compatible_db = {}
-                for meal_id in unique_meals:
-                    json_compatible_db[str(meal_id)] = self.meal_database[meal_id]
+        #     try:
+        #         json_compatible_db = {}
+        #         for meal_id in unique_meals:
+        #             json_compatible_db[str(meal_id)] = self.meal_database[meal_id]
                 
-                with open('meal_database.json', 'w', encoding='utf-8') as f:
-                    json.dump(json_compatible_db, f, indent=2, ensure_ascii=False)
-            except Exception as e:
-                print(f"⚠️ Could not save meal database: {e}")
+        #         with open('meal_database.json', 'w', encoding='utf-8') as f:
+        #             json.dump(json_compatible_db, f, indent=2, ensure_ascii=False)
+        #     except Exception as e:
+        #         print(f"⚠️ Could not save meal database: {e}")
                 
         else:
             print("❌ No meal data available for database generation")
@@ -116,8 +117,8 @@ class FoodDemandForecaster:
     def load_meal_names(self):
         """Load meal names and data from existing JSON file"""
         try:
-            if os.path.exists('meal_database.json'):
-                with open('meal_database.json', 'r', encoding='utf-8') as f:
+            if os.path.exists('data/meal_database.json'):
+                with open('data/meal_database.json', 'r', encoding='utf-8') as f:
                     raw_meal_data = json.load(f)
                 
                 self.meal_database = {}
@@ -160,10 +161,6 @@ class FoodDemandForecaster:
                 
         except Exception as e:
             print(f"❌ Error loading meal database: {e}")
-            self.meal_names = {}
-            self.meal_database = {}
-            if self.train_data is not None:
-                self.generate_meal_database()
     
     def get_meal_display_name(self, meal_id):
         """Get display name for a meal"""
