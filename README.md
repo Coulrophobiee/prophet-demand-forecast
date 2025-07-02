@@ -35,7 +35,7 @@ The system analyzes historical meal order data across multiple regions and gener
 pip install -r requirements.txt
 ```
 
-2. Download `train.csv` from the [Kaggle dataset](https://www.kaggle.com/datasets/kannanaikkal/food-demand-forecasting) and place it in the application directory
+2. Download the entire dataset from the [Kaggle dataset](https://www.kaggle.com/datasets/kannanaikkal/food-demand-forecasting) and place all individual files in the application directory
 
 3. Run the server:
 ```bash
