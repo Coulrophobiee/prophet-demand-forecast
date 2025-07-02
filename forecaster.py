@@ -1157,8 +1157,8 @@ class FoodDemandForecaster:
                 'meals': [meal['id'] for meal in meals_list],
                 'meals_with_names': meals_list,
                 'weeks_range': [
-                    int(self.train_data['week'].min()) if self.train_data is not None else 0,
-                    int(self.train_data['week'].max()) if self.train_data is not None else 0
+                    int(self.train_data['week'].min()) if self.train_data is not None and len(self.train_data) > 0 and not pd.isna(self.train_data['week'].min()) else 0,
+                    int(self.train_data['week'].max()) if self.train_data is not None and len(self.train_data) > 0 and not pd.isna(self.train_data['week'].max()) else 0
                 ],
                 'has_price_data': bool(self.column_mapping.get('checkout_price')),
                 'price_regressors_available': ['checkout_price'] if self.column_mapping.get('checkout_price') else [],
